@@ -6,6 +6,8 @@ use atomic_loans::cves::{dec_cs, vf_enc_cs, precompute_enc_cs, enc_cs_with_preco
 
 use atomic_loans::schnorradaptor::{kgen as adaptor_kgen, verify as adaptor_verify};
 
+use atomic_loans::atomicloan::prepare_loan;
+
 use secp256kfun::{g,  G};
 
 use std::time::Instant;
@@ -24,6 +26,8 @@ struct Args {
 fn main() {
 
     let args = Args::parse();
+
+    
     
     // Oracle key and message
     let kp = kgen();
@@ -40,7 +44,7 @@ fn main() {
 
     
 
-    println!("Testing cves");
+    println!("\nEvaluation cves");
 
        
     // Secrets a and w
@@ -50,6 +54,8 @@ fn main() {
 
     let xa = g!(wa * G).normalize();
     let xw = g!(ww * G).normalize();
+
+   
 
     // Encrypt CVES
   
@@ -121,6 +127,22 @@ fn main() {
         "Total time with precomputation: {:?}",
         (end_cves_enc + end_cves_vf + end_cves_dec - end_cves_pre)
     );
+
+    println!("\nEvaluation: loan setup --dumb oracle");
+
+    let start_loan = Instant::now();
+
+    let installments = 3;
+
+    let loan_ciphertexts = prepare_loan(args.gamma.clone(), installments, kp.pk, &bank_kp);
+
+    let end_loan = start_loan.elapsed();
+
+    println!(
+        "Total loan setup time: {:?} for {} installments",
+        end_loan, installments
+    );
+    println!("Number of CVES ciphertexts prepared: {}", loan_ciphertexts.len());
 
 
 }
