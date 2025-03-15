@@ -1,5 +1,5 @@
 use bls12_381::{
-    pairing, G1Affine, G2Affine, Scalar, Gt
+    pairing, G1Affine, G2Affine, Scalar, Gt, G2Projective,
 };
 
 use crate::common::{hash_to_g2, gt_to_bytes};
@@ -27,6 +27,30 @@ pub fn wes_enc_precom(pk: G1Affine, m: &str, r1: Scalar, r2: Gt, c1: G1Affine, c
         c3
     }
 
+}
+
+// WES in which c1, c2 have been precomputed, and m is a vector of strings
+pub fn wes_enc_precom_vector(pk: G1Affine, m: &Vec<String>, r1: Scalar, r2: Gt, c1: G1Affine, c3: [u8; 32]) -> WESCiphertext {
+
+
+    let mut agg_m_hash = G2Projective::identity();
+    for att in m{
+
+        let affine = hash_to_g2(att);
+
+        agg_m_hash = agg_m_hash + G2Projective::from(affine);
+
+    }
+
+    let agg_m_hash = G2Affine::from(agg_m_hash);
+    
+    let c2 = pairing(&pk, &agg_m_hash)*r1 + r2;
+
+    WESCiphertext{
+        c1,
+        c2,
+        c3
+    }
 
 }
 
