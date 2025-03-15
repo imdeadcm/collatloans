@@ -26,6 +26,15 @@ pub struct Precomp{
     pub ri_pub: Point
 }
 
+pub struct MessagesAL{
+    pub j: usize,
+    pub state: String,
+    pub transition: String,
+    pub statement: Point,
+    pub witness: ChainScalar,
+
+}
+
 
 pub fn wes_precompute(g2_prepared: &G2Prepared) -> Precomp {
 
@@ -197,4 +206,60 @@ pub fn schnorr_hash(pk:Point, rand:Point, m:&str) -> ChainScalar {
 
     r
 
+}
+
+
+pub fn message_creator(installments:usize) -> Vec<MessagesAL> {
+   
+    let mut tuples = Vec::new();
+
+    for i in 1..=installments {
+        for j in 0..i {
+
+            let transition = format!("transition {}-{}", j, i);
+            let state = format!("state {}", i);
+
+            let witness = sample_rand_chain_scalar();        
+            let statement = g!(witness * G).normalize();
+
+            let entry = MessagesAL{
+                j,
+                state,
+                transition,
+                statement,
+                witness,
+            };
+    
+            tuples.push(entry);
+        }
+    }
+
+    tuples
+}
+
+
+pub fn message_creator_involved_oracle(installments:usize) -> Vec<MessagesAL> {
+   
+    let mut tuples = Vec::new();
+
+    for j in 1..=installments {
+        
+            let transition = format!("transition passing {}", j);
+            let state = format!("state {}", j);
+
+            let witness = sample_rand_chain_scalar();        
+            let statement = g!(witness * G).normalize();
+
+            let entry = MessagesAL{
+                j,
+                state,
+                transition,
+                statement,
+                witness,
+            };
+    
+            tuples.push(entry);
+    }
+
+    tuples
 }

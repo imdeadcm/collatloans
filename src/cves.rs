@@ -3,7 +3,7 @@ use bls12_381::{
 };
 
 use crate::common::{sample_rand_gt,sample_rand_scalar, sample_rand_chain_scalar, hash_to_bits, Precomp, wes_precompute};
-use crate::wes::{wes_enc, wes_dec, WESCiphertext, wes_enc_precom};
+use crate::wes::{wes_enc, wes_dec, WESCiphertext, wes_enc_precom, wes_enc_precom_vector};
 
 use crate::schnorradaptor::{pre_sign, pre_verify, adapt, SchnorrPair, SchnorrPreSig, SchnorrSig};
 
@@ -381,3 +381,111 @@ pub fn enc_cs_with_precomputation(gamma: usize, pk: G1Affine, wa: ChainScalar, m
     }
 
 }
+
+
+pub fn enc_cs_with_precomputation_vector(gamma: usize, pk: G1Affine, wa: Vec<ChainScalar>, m: Vec<String>, sec:ChainScalar, a_kp:&SchnorrPair, tx:&str , precom: &Vec<Precomp>, end:usize) -> CVESCiphertext {
+
+   
+    // Parallelize the loop using rayon
+    let (v_ri_pub, results): (Vec<Point>, Vec<(ChainScalar, WESCiphertext, Scalar, Gt)>) = (0..gamma)
+    .into_par_iter() // 
+    .map(|i| {
+ 
+         // Get precomputed data
+         let ri = precom[i].ri.clone();
+         let ri_pub = precom[i].ri_pub;
+ 
+         let r1 = precom[i].r1;
+         let r2 = precom[i].r2;
+ 
+         let c1 = precom[i].c1;
+         let c3 = precom[i].c3;
+ 
+         // finalize WES ciphertexts
+         let ci = wes_enc_precom_vector(pk, &m, r1, r2, c1, c3);
+ 
+         // Return the results as a tuple
+         (ri_pub, (ri, ci, r1, r2))
+    })
+    .collect();
+ 
+    let mut cis = Vec::<WESCiphertext>::new();
+ 
+    for result in &results{
+ 
+     cis.push(result.1);
+ 
+    }
+
+    // THESE LINES BELOW NEED TO CHANGE. I HAVE TEMPORARILY CHANGE WA TO Y SO THAT IT DOES NOT BREAK
+ 
+     // Line 3: Sample y Y
+ 
+     let y = sample_rand_chain_scalar();
+     let y_pub = g!(y * G).normalize();
+ 
+     let xa = g!(y * G).normalize();
+     let xw = g!(sec * G).normalize();
+     let y_tilde_pub = g!(y_pub + xa).normalize().expect_nonzero("");
+ 
+     // Line 4 presignature;
+ 
+     let sigma_tilde = pre_sign(a_kp, tx, &y_tilde_pub);
+ 
+     // Line 5: One time pad to hide sec
+ 
+     let mut c_omega = s!(y + y);
+ 
+     c_omega = s!(c_omega +sec);
+ 
+     // Line 8: run H2 to get some bits.
+ 
+     let bits = hash_to_bits(&cis, v_ri_pub.clone(), c_omega.clone(), xa, xw, y_pub, &sigma_tilde);
+ 
+     let mut sop=Vec::<SopUnit>::new();
+     let mut suop=Vec::<SuopUnit>::new();
+
+    //  NOTE: HERE WE NEED TO CHANGE A FEW THINGS AS WELL, AND IT REQUIRES A NEW DECRYPTION AND VERIFICATION IMPLEMENTATION
+ 
+     for i in 0..gamma {
+ 
+         let bit = bits[i];
+ 
+         // Perform actions based on the bit value
+         if bit {
+             // Bit is 1 (true), fill SOP
+ 
+             let r1 = results[i].2;
+             let r2 = results[i].3;
+             let ri = results[i].0.clone();
+             let ci = results[i].1.clone();
+ 
+             let rho = (r1, r2);
+ 
+             sop.push(SopUnit {i, ri, rho, ci});
+         } else {
+             // Bit is 0 (false), fill SUOP
+ 
+             let ri = &results[i].0;
+ 
+             let si = s!(y + ri);
+ 
+             let ci = results[i].1.clone();
+ 
+             suop.push(SuopUnit {i,si, ci});
+         }
+     }
+ 
+     CVESCiphertext {
+         cis,
+         c_omega,
+         sop,
+         suop,
+         v_ri_pub,
+         xa,
+         xw,
+         y_pub,
+         sigma_tilde,
+     }
+ 
+ }
