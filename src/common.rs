@@ -236,3 +236,30 @@ pub fn message_creator(installments:usize) -> Vec<MessagesAL> {
 
     tuples
 }
+
+
+pub fn message_creator_involved_oracle(installments:usize) -> Vec<MessagesAL> {
+   
+    let mut tuples = Vec::new();
+
+    for j in 1..=installments {
+        
+            let transition = format!("transition passing {}", j);
+            let state = format!("state {}", j);
+
+            let witness = sample_rand_chain_scalar();        
+            let statement = g!(witness * G).normalize();
+
+            let entry = MessagesAL{
+                j,
+                state,
+                transition,
+                statement,
+                witness,
+            };
+    
+            tuples.push(entry);
+    }
+
+    tuples
+}
