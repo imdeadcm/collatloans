@@ -6,7 +6,7 @@ use atomic_loans::cves::{dec_cs, vf_enc_cs, precompute_enc_cs, enc_cs_with_preco
 
 use atomic_loans::schnorradaptor::{kgen as adaptor_kgen, verify as adaptor_verify};
 
-use atomic_loans::atomicloan::prepare_loan;
+use atomic_loans::atomicloan::{prepare_loan, prepare_loan_involved_oracle};
 
 use secp256kfun::{g,  G};
 
@@ -128,7 +128,7 @@ fn main() {
         (end_cves_enc + end_cves_vf + end_cves_dec - end_cves_pre)
     );
 
-    println!("\nEvaluation: loan setup --dumb oracle");
+    println!("\nEvaluation: loan setup --oblivious oracle");
 
     let start_loan = Instant::now();
 
@@ -143,6 +143,22 @@ fn main() {
         end_loan, installments
     );
     println!("Number of CVES ciphertexts prepared: {}", loan_ciphertexts.len());
+
+    println!("\nEvaluation: loan setup --involved oracle");
+
+    let start_loan_i = Instant::now();
+
+    let installments = 3;
+
+    let loan_ciphertexts_i = prepare_loan_involved_oracle(args.gamma.clone(), installments, kp.pk, &bank_kp);
+
+    let end_loan_i = start_loan_i.elapsed();
+
+    println!(
+        "Total loan setup time: {:?} for {} installments",
+        end_loan_i, installments
+    );
+    println!("Number of CVES ciphertexts prepared: {}", loan_ciphertexts_i.len());
 
 
 }
