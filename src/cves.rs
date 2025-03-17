@@ -23,13 +23,13 @@ pub struct SopUnit {
 
 pub struct SuopUnit {
     pub i: usize,
-    pub si: ChainScalar<Secret, Zero>,
+    pub si: ChainScalar,
     pub ci: WESCiphertext,
 }
 
 pub struct CVESCiphertext {
     pub cis: Vec<WESCiphertext>,
-    pub c_omega: ChainScalar<Secret, Zero>,
+    pub c_omega: ChainScalar,
     pub sop: Vec<SopUnit>,
     pub suop: Vec<SuopUnit>,
     pub v_ri_pub: Vec<Point>,
@@ -37,6 +37,18 @@ pub struct CVESCiphertext {
     pub xw: Point,
     pub y_pub: Point,
     pub sigma_tilde: SchnorrPreSig,
+}
+
+pub struct CVESCiphertext2 {
+    pub cis: Vec<WESCiphertext>,
+    pub c_omega: Vec<ChainScalar>,
+    pub sop: Vec<SopUnit>,
+    pub suop: Vec<SuopUnit>,
+    pub v_ri_pub: Vec<Point>,
+    pub xa: Point,
+    pub xw: Point,
+    pub y_pub: Vec<Point>,
+    pub sigma_tilde: Vec<SchnorrPreSig>,
 }
 
 pub fn enc_cs(gamma: usize, pk: G1Affine, wa: ChainScalar, m: &str, sec:ChainScalar, a_kp:&SchnorrPair, tx:&str) -> CVESCiphertext {
@@ -90,9 +102,9 @@ pub fn enc_cs(gamma: usize, pk: G1Affine, wa: ChainScalar, m: &str, sec:ChainSca
 
     // Line 5: One time pad to hide sec
 
-    let mut c_omega = s!(y + wa);
+    let mut c_omega = s!(y + wa).expect_nonzero("");
 
-    c_omega = s!(c_omega +sec);
+    c_omega = s!(c_omega +sec).expect_nonzero("");
 
     // Line 8: run H2 to get some bits.
 
@@ -122,7 +134,7 @@ pub fn enc_cs(gamma: usize, pk: G1Affine, wa: ChainScalar, m: &str, sec:ChainSca
 
             let ri = &results[i].0;
 
-            let si = s!(y + ri);
+            let si = s!(y + ri).expect_nonzero("");
 
             let ci = results[i].1.clone();
 
@@ -183,13 +195,12 @@ pub fn vf_enc_cs(gamma: usize, pk: G1Affine, xa: Point, xw:Point, m: &str, c:&CV
     // Check one time pad
     let gc_omega = g!(c.c_omega * G).normalize();
 
-    let mut check = g!(xa+xw).normalize();
+    let mut check = g!(xa+xw).normalize().expect_nonzero("");
     let y1 = &c.y_pub;
-    check = g!(check + y1).normalize();
+    check = g!(check + y1).normalize().expect_nonzero("");
 
-    if gc_omega != check{
-        panic!("CVES verification failed")
-    }
+    assert!(gc_omega == check, "CVES verification failed");
+
 
     // Check presignature
     let y2=&c.y_pub;
@@ -198,11 +209,7 @@ pub fn vf_enc_cs(gamma: usize, pk: G1Affine, xa: Point, xw:Point, m: &str, c:&CV
 
     let a_res =  pre_verify(a_pk, tx, &c.sigma_tilde, &y_tilde_pub);
 
-    if a_res != true{
-        panic!("Invalid presignature")
-    }
-
-    // for idx in 0..gamma {
+    assert!(a_res == true, "Invalid presignature");
 
     (0..gamma).into_par_iter().for_each(|idx|{
         
@@ -217,11 +224,8 @@ pub fn vf_enc_cs(gamma: usize, pk: G1Affine, xa: Point, xw:Point, m: &str, c:&CV
 
                 let got = wes_enc(pk, &m, sop_unit.ri.clone(), sop_unit.rho.0, sop_unit.rho.1);
 
-                if got != sop_unit.ci{
+                assert!(got == sop_unit.ci, "CVES verification failed");
 
-                    panic!("CVES verification failed")
-
-                } 
                 
             } else {
                 panic!("CVES verification failed")
@@ -239,11 +243,7 @@ pub fn vf_enc_cs(gamma: usize, pk: G1Affine, xa: Point, xw:Point, m: &str, c:&CV
 
                 let check2 = g!(c.y_pub + ri_pub);
 
-                if gs != check2{
-
-                    panic!("CVES verification failed")
-
-                }
+                assert!(gs == check2, "CVES verification failed");
                 
             } else {
                 panic!("CVES verification failed")
@@ -328,9 +328,9 @@ pub fn enc_cs_with_precomputation(gamma: usize, pk: G1Affine, wa: ChainScalar, m
 
     // Line 5: One time pad to hide sec
 
-    let mut c_omega = s!(y + wa);
+    let mut c_omega = s!(y + wa).expect_nonzero("");
 
-    c_omega = s!(c_omega +sec);
+    c_omega = s!(c_omega +sec).expect_nonzero("");
 
     // Line 8: run H2 to get some bits.
 
@@ -360,7 +360,7 @@ pub fn enc_cs_with_precomputation(gamma: usize, pk: G1Affine, wa: ChainScalar, m
 
             let ri = &results[i].0;
 
-            let si = s!(y + ri);
+            let si = s!(y + ri).expect_nonzero("");
 
             let ci = results[i].1.clone();
 
@@ -383,7 +383,11 @@ pub fn enc_cs_with_precomputation(gamma: usize, pk: G1Affine, wa: ChainScalar, m
 }
 
 
-pub fn enc_cs_with_precomputation_vector(gamma: usize, pk: G1Affine, wa: Vec<ChainScalar>, m: Vec<String>, sec:ChainScalar, a_kp:&SchnorrPair, tx:&str , precom: &Vec<Precomp>, end:usize) -> CVESCiphertext {
+pub fn enc_cs_with_precomputation_vector(gamma: usize, pk: G1Affine, wa: Vec<ChainScalar>, m: Vec<String>, sec:ChainScalar, a_kp:&SchnorrPair, tx:&str , precom: &Vec<Precomp>, end:usize) -> CVESCiphertext2 {
+
+
+    let l = m.len();
+    assert!(&l == &wa.len(), "different vector length between w and m");
 
    
     // Parallelize the loop using rayon
@@ -417,42 +421,57 @@ pub fn enc_cs_with_precomputation_vector(gamma: usize, pk: G1Affine, wa: Vec<Cha
  
     }
 
-    // THESE LINES BELOW NEED TO CHANGE. I HAVE TEMPORARILY CHANGE WA TO Y SO THAT IT DOES NOT BREAK
- 
-     // Line 3: Sample y Y
- 
-     let y = sample_rand_chain_scalar();
-     let y_pub = g!(y * G).normalize();
- 
-     let xa = g!(y * G).normalize();
-     let xw = g!(sec * G).normalize();
-     let y_tilde_pub = g!(y_pub + xa).normalize().expect_nonzero("");
- 
-     // Line 4 presignature;
- 
-     let sigma_tilde = pre_sign(a_kp, tx, &y_tilde_pub);
- 
-     // Line 5: One time pad to hide sec
- 
-     let mut c_omega = s!(y + y);
- 
-     c_omega = s!(c_omega +sec);
- 
-     // Line 8: run H2 to get some bits.
- 
-     let bits = hash_to_bits(&cis, v_ri_pub.clone(), c_omega.clone(), xa, xw, y_pub, &sigma_tilde);
- 
-     let mut sop=Vec::<SopUnit>::new();
-     let mut suop=Vec::<SuopUnit>::new();
 
-    //  NOTE: HERE WE NEED TO CHANGE A FEW THINGS AS WELL, AND IT REQUIRES A NEW DECRYPTION AND VERIFICATION IMPLEMENTATION
+    
+
+    let mut y = Vec::<ChainScalar>::new();
+    let mut y_pub= Vec::<Point>::new();
+    let mut c_omega = Vec::<ChainScalar>::new();
+    let mut sigma_tilde = Vec::<SchnorrPreSig>::new();
+
+    for j in 0..l{
+
+        let y_j = sample_rand_chain_scalar();
+        let y_pub_j = g!(y_j * G).normalize();      
+        let mut y_tilde_j = Scalar::one();
+
+        let w = &wa[j];
+
+        let y_tilde_j = s!(y_j + w).expect_nonzero("");    
+
+        let y_tilde_pub_j = g!(y_tilde_j * G).normalize();
+
+        let omega_c_j = s!(y_tilde_j + sec).expect_nonzero("");
+
+        let sigma_tilde_j = pre_sign(a_kp, tx, &y_tilde_pub_j);
+
+        y.push(y_j);
+        y_pub.push(y_pub_j);
+        c_omega.push(omega_c_j);
+        sigma_tilde.push(sigma_tilde_j); 
+
+    }
+
  
-     for i in 0..gamma {
+     // run H2 to get some bits.
+
+    // keep these two for the moment to reuse temporarily H2.
+
+    let w = &wa[0];
+    let xa = g!(w * G).normalize();
+    let xw = g!(sec * G).normalize();
  
-         let bit = bits[i];
+    let bits = hash_to_bits(&cis, v_ri_pub.clone(), c_omega[0].clone(), xa, xw, y_pub[0].clone(), &sigma_tilde[0].clone());
+ 
+    let mut sop=Vec::<SopUnit>::new();
+    let mut suop=Vec::<SuopUnit>::new();
+     
+    for i in 0..gamma {
+ 
+        let bit = bits[i];
  
          // Perform actions based on the bit value
-         if bit {
+        if bit {
              // Bit is 1 (true), fill SOP
  
              let r1 = results[i].2;
@@ -465,18 +484,25 @@ pub fn enc_cs_with_precomputation_vector(gamma: usize, pk: G1Affine, wa: Vec<Cha
              sop.push(SopUnit {i, ri, rho, ci});
          } else {
              // Bit is 0 (false), fill SUOP
+
+             for j in 0..l{
+                let ri = &results[i].0;
+
+                let y = &y[i];
  
-             let ri = &results[i].0;
+                let si = s!(y + ri).expect_nonzero("");
  
-             let si = s!(y + ri);
- 
-             let ci = results[i].1.clone();
+                let ci = results[i].1.clone();
  
              suop.push(SuopUnit {i,si, ci});
+
+             }
+ 
+             
          }
      }
  
-     CVESCiphertext {
+     CVESCiphertext2 {
          cis,
          c_omega,
          sop,

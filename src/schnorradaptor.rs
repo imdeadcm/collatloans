@@ -16,6 +16,7 @@ pub struct SchnorrSig {
     r: ChainScalar,
 }
 
+#[derive(Clone)]
 pub struct SchnorrPreSig {
     pub s: ChainScalar,
     pub r: ChainScalar,

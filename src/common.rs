@@ -120,7 +120,7 @@ fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
 
 // For the moment, it does not take the WES ciphertexts as input, I will modify it at a later moment.
 
-pub fn hash_to_bits(cis:&Vec<WESCiphertext>, ri_pub:Vec<Point>, c_omega: ChainScalar<Secret, Zero>, xa: Point, xw: Point, y_pub: Point, sigma_tilde: &SchnorrPreSig ) ->Vec<bool>{
+pub fn hash_to_bits(cis:&Vec<WESCiphertext>, ri_pub:Vec<Point>, c_omega: ChainScalar, xa: Point, xw: Point, y_pub: Point, sigma_tilde: &SchnorrPreSig ) ->Vec<bool>{
 
     // Step 1: Serialize all inputs into bytes
     let mut serialized_data = Vec::new();
