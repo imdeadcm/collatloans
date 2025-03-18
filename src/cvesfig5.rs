@@ -161,7 +161,7 @@ impl CVESCiphertextFig5 {
         let y1 = &self.y_pub;
         check = g!(check + y1).normalize().expect_nonzero("");
     
-        assert!(gc_omega == check, "CVES verification failed");
+        assert!(gc_omega == check, "CVES verification failed: invalid encryption");
 
         // Check presignature
         let y2=&self.y_pub;
@@ -202,7 +202,7 @@ impl CVESCiphertextFig5 {
     
                     let check2 = g!(self.y_pub + ri_pub).normalize().expect_nonzero("They should be two random points");
     
-                    assert!(gs == check2, "CVES verification failed");
+                    assert!(gs == check2, "CVES verification failed: invalid si");
                     
                 } else {
                     panic!("CVES verification failed")
