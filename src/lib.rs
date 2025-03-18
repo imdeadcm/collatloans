@@ -4,3 +4,5 @@ pub mod wes;
 pub mod cves;
 pub mod schnorradaptor;
 pub mod atomicloan;
+pub mod cvesfig5;
+

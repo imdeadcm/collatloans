@@ -3,6 +3,7 @@ use bls12_381::{
 };
 
 use crate::common::{sample_rand_gt,sample_rand_scalar, sample_rand_chain_scalar, hash_to_bits, Precomp, wes_precompute};
+
 use crate::wes::{wes_enc, wes_dec, WESCiphertext, wes_enc_precom, wes_enc_precom_vector};
 
 use crate::schnorradaptor::{pre_sign, pre_verify, adapt, SchnorrPair, SchnorrPreSig, SchnorrSig};
