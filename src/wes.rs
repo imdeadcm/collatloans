@@ -107,6 +107,33 @@ impl WESCiphertext{
 
     }
 
+    pub fn new_from_precom_vector_m(pre:PreComp, pk:G1Affine, m: Vec<String>) -> WESCiphertext {
+
+        let mut agg_m_hash = G2Projective::identity();
+        for att in m{
+
+            let affine = hash_to_g2(&att);
+
+            agg_m_hash = agg_m_hash + G2Projective::from(affine);
+
+        }
+
+        let agg_m_hash = G2Affine::from(agg_m_hash);
+        
+        let c2 = pairing(&pk, &agg_m_hash)*pre.r1 + pre.r2;
+
+        let c1 = pre.c1;
+
+        let c3 = pre.c3;
+
+        WESCiphertext{
+            c1,
+            c2,
+            c3
+        }
+
+    }
+
 
     // Function to decrypt a WES ciphertext using signature sig.
     pub fn decrypt(self, sig:G2Affine)-> ChainScalar {
@@ -125,12 +152,45 @@ impl WESCiphertext{
 
         }
 
-    // Given the random secret and the random coins, check if a given ciphertext is well-formed
+    // Given the random secret and the random coins, check if a given ciphertext is well-formed (for a vector of messages)
     pub fn reconstruct(self, pk: G1Affine, m: &str, sec:ChainScalar, r1: Scalar, r2: Gt) -> () {
 
         let new_c1 = G1Affine::from(G1Affine::generator() * r1);
 
+        
+
         let new_c2 = pairing(&pk, &hash_to_g2(m))*r1 + r2;
+
+        let mut h_xor_sec = gt_to_bytes(&r2);
+
+        for (xor_byte, ri_byte) in h_xor_sec.iter_mut().zip(sec.to_bytes()) {
+            *xor_byte ^= ri_byte
+        }
+
+        let new_c3:[u8;32] = h_xor_sec.try_into().unwrap();
+
+        assert!(self.c1 == new_c1, "C1 is invalid");
+        assert!(self.c2 == new_c2, "C2 is invalid");
+        assert!(self.c3 == new_c3, "C3 is invalid");
+
+    }
+
+    pub fn reconstruct_vector_m(self, pk: G1Affine, m: Vec<String>, sec:ChainScalar, r1: Scalar, r2: Gt) -> () {
+
+        let new_c1 = G1Affine::from(G1Affine::generator() * r1);
+
+        let mut agg_m_hash = G2Projective::identity();
+        for att in m{
+
+            let affine = hash_to_g2(&att);
+
+            agg_m_hash = agg_m_hash + G2Projective::from(affine);
+
+        }
+
+        let agg_m_hash = G2Affine::from(agg_m_hash);
+
+        let new_c2 = pairing(&pk, &agg_m_hash)*r1 + r2;
 
         let mut h_xor_sec = gt_to_bytes(&r2);
 
