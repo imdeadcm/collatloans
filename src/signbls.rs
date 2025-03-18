@@ -1,5 +1,5 @@
 use bls12_381::{
-    pairing, G1Affine, G2Affine, Scalar,
+    pairing, G1Affine, G2Affine, Scalar, G2Projective,
 };
 
 use crate::common::hash_to_g2;
@@ -42,5 +42,24 @@ impl BLSKeyPair{
         let expected = pairing(&self.pk, &hash_to_g2(m));
     
         gt == expected
+    }
+
+    pub fn agg_sign(self, m:Vec<String>) ->G2Affine{
+        // given a list of messages, computes the aggregated signature on those messages.
+
+        let mut agg_m_hash = G2Projective::identity();
+        for att in m{
+
+            let affine = hash_to_g2(&att);
+
+            agg_m_hash = agg_m_hash + G2Projective::from(affine);
+
+        }
+
+        let agg_sig = G2Affine::from(agg_m_hash*self.sk); 
+
+        agg_sig
+
+
     }
 }
