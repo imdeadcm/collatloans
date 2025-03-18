@@ -8,34 +8,39 @@ use rand::rngs::OsRng;
 use ff::Field;
 
 
-pub struct MyBLSPair {
+#[derive(Copy, Clone)]
+pub struct BLSKeyPair {
     sk: Scalar,
     pub pk: G1Affine,
 }
 
-pub fn kgen() -> MyBLSPair {
 
-    let sk =  Scalar::random(&mut OsRng);
-    let pk = G1Affine::from(G1Affine::generator() * sk);
+impl BLSKeyPair{
 
-    MyBLSPair {
-        sk,
-        pk,
+    pub fn new() -> BLSKeyPair{
+
+        let sk =  Scalar::random(&mut OsRng);
+        let pk = G1Affine::from(G1Affine::generator() * sk);
+
+        BLSKeyPair {
+            sk,
+            pk,
+        }
+
     }
 
-}
-
-
-pub fn sign(kp:&MyBLSPair, m: &str)-> G2Affine {
+    pub fn sign(self, m: &str)-> G2Affine {
     
-    G2Affine::from(hash_to_g2(m) * kp.sk)
-}
+        G2Affine::from(hash_to_g2(m) * self.sk)
+    }
 
-pub fn verify(pk: G1Affine, m: &str, s:G2Affine) ->bool {
 
-    let gt = pairing(&G1Affine::generator(), &s);
+    pub fn verify(self, m: &str, s:G2Affine) ->bool {
 
-    let expected = pairing(&pk, &hash_to_g2(m));
-
-    gt == expected
+        let gt = pairing(&G1Affine::generator(), &s);
+    
+        let expected = pairing(&self.pk, &hash_to_g2(m));
+    
+        gt == expected
+    }
 }
