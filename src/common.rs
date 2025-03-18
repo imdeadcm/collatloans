@@ -12,7 +12,6 @@ use crate::wes::WESCiphertext;
 use rand::rngs::OsRng;
 
 use secp256kfun::{g,  Scalar as ChainScalar, G, Point};
-use secp256kfun::marker::*;
 
 use group::Group;
 use ff::Field;
@@ -32,6 +31,14 @@ pub struct MessagesAL{
     pub transition: String,
     pub statement: Point,
     pub witness: ChainScalar,
+
+}
+
+pub struct LoanContractFig6{
+    pub state: Vec<String>,
+    pub transition: Vec<String>,
+    pub statement: Vec<Point>,
+    pub witness: Vec<ChainScalar>,
 
 }
 
@@ -238,28 +245,42 @@ pub fn message_creator(installments:usize) -> Vec<MessagesAL> {
 }
 
 
-pub fn message_creator_involved_oracle(installments:usize) -> Vec<MessagesAL> {
-   
-    let mut tuples = Vec::new();
+pub fn message_creator_involved_oracle(installments:usize) -> LoanContractFig6 {
 
-    for j in 1..=installments {
-        
-            let transition = format!("transition passing {}", j);
-            let state = format!("state {}", j);
 
-            let witness = sample_rand_chain_scalar();        
-            let statement = g!(witness * G).normalize();
+    let (state, transition, mut statement, mut witness):(Vec<String>, Vec<String>, Vec<Point>, Vec<ChainScalar>) = (1..=installments)
+    .map(|i|{
 
-            let entry = MessagesAL{
-                j,
-                state,
-                transition,
-                statement,
-                witness,
-            };
-    
-            tuples.push(entry);
+        let transition = format!("transition passing {}", i);
+        let state = format!("state {}", i);
+        let witness = sample_rand_chain_scalar();        
+        let statement = g!(witness * G).normalize();
+        (
+            state,
+            transition,
+            statement,
+            witness,
+        )
+
+
+
+    })
+    .collect();
+
+    let w0 = sample_rand_chain_scalar();
+    let x0 = g!(w0 * G).normalize();
+
+    statement.insert(0, x0);
+    witness.insert(0, w0);
+
+    LoanContractFig6{
+        state,
+        transition,
+        statement,
+        witness,
     }
 
-    tuples
+   
 }
+
+
