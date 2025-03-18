@@ -6,6 +6,7 @@ use crate::common::{sample_rand_chain_scalar, schnorr_hash};
 // implementation taken from https://eprint.iacr.org/2020/476.pdf
 // extract not implemented because we dont need it
 
+#[derive(Clone)]
 pub struct SchnorrPair {
     sk: ChainScalar,
     pub pk: Point,
@@ -16,6 +17,7 @@ pub struct SchnorrSig {
     r: ChainScalar,
 }
 
+#[derive(Clone)]
 pub struct SchnorrPreSig {
     pub s: ChainScalar,
     pub r: ChainScalar,
