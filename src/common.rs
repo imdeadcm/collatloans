@@ -12,7 +12,6 @@ use crate::wes::WESCiphertext;
 use rand::rngs::OsRng;
 
 use secp256kfun::{g,  Scalar as ChainScalar, G, Point};
-use secp256kfun::marker::*;
 
 use group::Group;
 use ff::Field;
@@ -26,12 +25,22 @@ pub struct Precomp{
     pub ri_pub: Point
 }
 
+#[derive(Clone)]
 pub struct MessagesAL{
-    pub j: usize,
+    pub origin: usize,
+    pub end: usize,
     pub state: String,
     pub transition: String,
     pub statement: Point,
     pub witness: ChainScalar,
+
+}
+
+pub struct LoanContractFig6{
+    pub state: Vec<String>,
+    pub transition: Vec<String>,
+    pub statement: Vec<Point>,
+    pub witness: Vec<ChainScalar>,
 
 }
 
@@ -120,7 +129,7 @@ fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
 
 // For the moment, it does not take the WES ciphertexts as input, I will modify it at a later moment.
 
-pub fn hash_to_bits(cis:&Vec<WESCiphertext>, ri_pub:Vec<Point>, c_omega: ChainScalar<Secret, Zero>, xa: Point, xw: Point, y_pub: Point, sigma_tilde: &SchnorrPreSig ) ->Vec<bool>{
+pub fn hash_to_bits(cis:&Vec<WESCiphertext>, ri_pub:Vec<Point>, c_omega: ChainScalar, xa: Point, xw: Point, y_pub: Point, sigma_tilde: &SchnorrPreSig ) ->Vec<bool>{
 
     // Step 1: Serialize all inputs into bytes
     let mut serialized_data = Vec::new();
@@ -177,7 +186,94 @@ pub fn hash_to_bits(cis:&Vec<WESCiphertext>, ri_pub:Vec<Point>, c_omega: ChainSc
 
 }
 
-pub fn schnorr_hash(pk:Point, rand:Point, m:&str) -> ChainScalar {
+
+pub fn hash_to_bits_fig6(cis:&Vec<Vec<WESCiphertext>>, ri_pub:&Vec<Vec<Point>>, c_omega: &Vec<Vec<ChainScalar>>, x: &Vec<Point>, y_pub: &Vec<Vec<Point>>, sigma_tilde: &Vec<Vec<SchnorrPreSig>> ) ->Vec<bool>{
+
+        // Step 1: Serialize all inputs into bytes
+        let mut serialized_data = Vec::new();
+
+        // Serialize cis
+        for ci in cis {
+            for c in ci{
+                let c1_bytes = Sha256::default()
+                .chain(c.c1.to_compressed())
+                .finalize();
+                serialized_data.extend(c1_bytes);
+                let c2_bytes = gt_to_bytes(&c.c2);
+                serialized_data.extend(c2_bytes);
+                serialized_data.extend(c.c3);
+
+            }
+            
+        }
+    
+        // Serialize ri_pub
+        for points in ri_pub {
+            for point in points{
+
+                let point_bytes = point.to_bytes();
+                serialized_data.extend(point_bytes);
+
+            }
+            
+        }
+    
+        // Serialize c_omega
+        for omegas in c_omega{
+            for omega in omegas{
+
+                let scalar_bytes = omega.to_bytes();
+                serialized_data.extend(scalar_bytes);
+
+            }
+        }
+        
+    
+        // Serialize x
+        for xa in x{
+            let xa_bytes = xa.to_bytes();
+            serialized_data.extend(xa_bytes);
+
+        }
+    
+        // Serialize y_pub
+        for points in y_pub{
+            for point in points{
+
+                let y_pub_bytes = point.to_bytes();
+                serialized_data.extend(y_pub_bytes);
+
+            }
+        }
+        
+    
+        // Serialize presig
+        for pss in sigma_tilde{
+            for ps in pss{
+
+                let sigmas_bytes = ps.s.to_bytes();
+                serialized_data.extend(sigmas_bytes);
+                let sigmar_bytes = ps.r.to_bytes();
+                serialized_data.extend(sigmar_bytes);
+
+            }
+        }
+    
+        // Step 2: Hash the concatenated serialized data
+        let mut hasher = Sha256::new();
+        hasher.update(&serialized_data);
+        let hash_result = hasher.finalize();
+    
+     
+        // Step 3: Convert the hash output to bits
+        bytes_to_bits(&hash_result)
+
+
+
+}
+
+
+pub fn schnorr_hash(pk:&Point, rand:Point, m:&str) -> ChainScalar {
 
 
     // Step 1. Serialize inputs
@@ -223,7 +319,8 @@ pub fn message_creator(installments:usize) -> Vec<MessagesAL> {
             let statement = g!(witness * G).normalize();
 
             let entry = MessagesAL{
-                j,
+                origin:j,
+                end:i,
                 state,
                 transition,
                 statement,
@@ -236,3 +333,45 @@ pub fn message_creator(installments:usize) -> Vec<MessagesAL> {
 
     tuples
 }
+
+
+pub fn message_creator_involved_oracle(installments:usize) -> LoanContractFig6 {
+
+
+    let (state, transition, mut statement, mut witness):(Vec<String>, Vec<String>, Vec<Point>, Vec<ChainScalar>) = (1..=installments)
+    .map(|i|{
+
+        let transition = format!("transition passing {}", i);
+        let state = format!("state {}", i);
+        let witness = sample_rand_chain_scalar();        
+        let statement = g!(witness * G).normalize();
+
+        (
+            state,
+            transition,
+            statement,
+            witness,
+        )
+
+
+
+    })
+    .collect();
+
+    let w0 = sample_rand_chain_scalar();
+    let x0 = g!(w0 * G).normalize();
+
+    statement.insert(0, x0);
+    witness.insert(0, w0);
+
+    LoanContractFig6{
+        state,
+        transition,
+        statement,
+        witness,
+    }
+
+   
+}
+
+
