@@ -5,7 +5,7 @@ use bls12_381::{
 use crate::common::{sample_rand_chain_scalar, hash_to_bits};
 use crate::wes::{WESCiphertext, PreComp};
 
-use crate::schnorradaptor::{pre_sign, pre_verify, SchnorrPair, SchnorrPreSig};
+use crate::schnorradaptor::{SchnorrPair, SchnorrPreSig};
 
 use secp256kfun::{g,s,  Scalar as ChainScalar, G, Point};
 
@@ -129,7 +129,9 @@ impl CVESCiphertextFig6{
                 let y_tilde_pub_ij = g!(y_pub_ij + xa).normalize().expect_nonzero("They are random points");
 
                 // adaptor
-                let sigma_tilde_ij = pre_sign(&a_kp, &tx[i-1], &y_tilde_pub_ij); 
+                // let sigma_tilde_ij = pre_sign(&a_kp, &tx[i-1], &y_tilde_pub_ij); 
+
+                let sigma_tilde_ij = a_kp.clone().pre_sign(&tx[i-1], &y_tilde_pub_ij); 
 
                 // encryption. replace in future by PKE
                 let mut c_omega_ij = s!(y_ij + wa).expect_nonzero("random scalar");    
@@ -294,10 +296,12 @@ impl CVESCiphertextFig6{
 
                 let tx_i= &self.tx[i-1];
                 let sigma_tilde_ij = &self.sigma_tilde[i-1][j];
+
+                sigma_tilde_ij.clone().pre_verify(&self.vk, tx_i, &y_tilde_pub_ij);
     
-                let a_res =  pre_verify(self.vk, tx_i, sigma_tilde_ij, &y_tilde_pub_ij);
+                // let a_res =  pre_verify(self.vk, tx_i, sigma_tilde_ij, &y_tilde_pub_ij);
     
-                assert!(a_res == true, "Invalid presignature");
+                // assert!(a_res == true, "Invalid presignature");
 
             }
         }

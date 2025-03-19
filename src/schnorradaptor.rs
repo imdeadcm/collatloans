@@ -24,86 +24,192 @@ pub struct SchnorrPreSig {
 }
 
 
-pub fn kgen() -> SchnorrPair {
 
-    let sk =  sample_rand_chain_scalar();
-    let pk = g!(sk * G).normalize();
+impl SchnorrPair{
 
-    SchnorrPair {
+    pub fn new() -> Self {
+
+        let sk =  sample_rand_chain_scalar();
+        let pk = g!(sk * G).normalize();
+
+    Self {
         sk,
         pk,
     }
 
-}
+    }
 
+    pub fn sign(self, m:&str)-> SchnorrSig {
 
-pub fn sign(kp:&SchnorrPair, m: &str)-> SchnorrSig {
+        let k =  sample_rand_chain_scalar();
+        let big_k = g!(k * G).normalize();
 
-    let k =  sample_rand_chain_scalar();
-    let big_k = g!(k * G).normalize();
+        let r = schnorr_hash(&self.pk, big_k, m);    
+        
+        let mut s = s!(r * self.sk);
 
-    let r = schnorr_hash(kp.pk, big_k, m);    
+        s = s!(k + s).expect_nonzero("unlikely that k, which is random and s add up to zero");
+
+        SchnorrSig{
+            s,
+            r
+        }
+
+    }
+
+    pub fn pre_sign(self, m: &str, y_pub:&Point)-> SchnorrPreSig {
+
+        let k =  sample_rand_chain_scalar();
+        let mut big_k = g!(k * G).normalize();
+        big_k = g!(y_pub + big_k).normalize().expect_nonzero(" ");
     
-    let mut s = s!(r * kp.sk);
-
-    s = s!(k + s).expect_nonzero("unlikely that k, which is random and s add up to zero");
-
-    SchnorrSig{
-        s,
-        r
+        let r = schnorr_hash(&self.pk, big_k, m);    
+        
+        let mut s = s!(r * self.sk);
+    
+        s = s!(k + s).expect_nonzero(" ");
+    
+        SchnorrPreSig{
+            s,
+            r
+        }
+    
     }
 
 }
 
-pub fn verify(pk: Point, m: &str, sig:SchnorrSig) ->bool {
+impl SchnorrSig{
 
-    let mut rand = g!(sig.r * pk).normalize();
-    let gs = g!(sig.s*G).normalize();
-    rand = g!(gs-rand).normalize().expect_nonzero(" ");
+    pub fn verify(self, pk: &Point, m:&str)-> () {
 
-    let got = schnorr_hash(pk, rand, m);
+        let mut rand = g!(self.r * pk).normalize();
+        let gs = g!(self.s*G).normalize();
+        rand = g!(gs-rand).normalize().expect_nonzero(" ");
 
-    got == sig.r
-}
+        let got = schnorr_hash(pk, rand, m);
 
-pub fn pre_sign(kp:&SchnorrPair, m: &str, y_pub:&Point)-> SchnorrPreSig {
+        assert!(got == self.r, "Invalid Schnorr Signature");
 
-    let k =  sample_rand_chain_scalar();
-    let mut big_k = g!(k * G).normalize();
-    big_k = g!(y_pub + big_k).normalize().expect_nonzero(" ");
-
-    let r = schnorr_hash(kp.pk, big_k, m);    
-    
-    let mut s = s!(r * kp.sk);
-
-    s = s!(k + s).expect_nonzero(" ");
-
-    SchnorrPreSig{
-        s,
-        r
     }
-
 }
 
-pub fn pre_verify(pk: Point, m: &str, pre_sig:&SchnorrPreSig, y_pub:&Point) ->bool {
+impl SchnorrPreSig{
 
-    let mut rand = g!(pre_sig.r * pk).normalize();
-    let gs = g!(pre_sig.s*G).normalize();
+    pub fn pre_verify(self, pk: &Point, m: &str, y_pub:&Point) ->() {
+
+    let mut rand = g!(self.r * pk).normalize();
+    let gs = g!(self.s*G).normalize();
     rand = g!(gs - rand).normalize().expect_nonzero(" ");
     rand = g!(rand+y_pub).normalize().expect_nonzero(" ");
 
     let got = schnorr_hash(pk, rand, m);
 
-    got == pre_sig.r
-}
+    assert!(got == self.r, "Invalid Schnorr PreSignature");
 
-pub fn adapt(pre_sig:&SchnorrPreSig, y:&ChainScalar)-> SchnorrSig{
-
-    let s = s!(pre_sig.s + y).expect_nonzero(" ");
-    let r = pre_sig.r.clone();
-
-    SchnorrSig{
-        s,
-        r
     }
+
+    pub fn adapt(self, y:&ChainScalar)-> SchnorrSig{
+
+        let s = s!(self.s + y).expect_nonzero(" ");
+        let r = self.r;
+    
+        SchnorrSig{
+            s,
+            r
+        }
+    }
+
+
 }
+
+
+
+
+
+
+
+
+
+// pub fn kgen() -> SchnorrPair {
+
+//     let sk =  sample_rand_chain_scalar();
+//     let pk = g!(sk * G).normalize();
+
+//     SchnorrPair {
+//         sk,
+//         pk,
+//     }
+
+// }
+
+
+// pub fn sign(kp:&SchnorrPair, m: &str)-> SchnorrSig {
+
+//     let k =  sample_rand_chain_scalar();
+//     let big_k = g!(k * G).normalize();
+
+//     let r = schnorr_hash(kp.pk, big_k, m);    
+    
+//     let mut s = s!(r * kp.sk);
+
+//     s = s!(k + s).expect_nonzero("unlikely that k, which is random and s add up to zero");
+
+//     SchnorrSig{
+//         s,
+//         r
+//     }
+
+// }
+
+// pub fn verify(pk: Point, m: &str, sig:SchnorrSig) ->bool {
+
+//     let mut rand = g!(sig.r * pk).normalize();
+//     let gs = g!(sig.s*G).normalize();
+//     rand = g!(gs-rand).normalize().expect_nonzero(" ");
+
+//     let got = schnorr_hash(pk, rand, m);
+
+//     got == sig.r
+// }
+
+// pub fn pre_sign(kp:&SchnorrPair, m: &str, y_pub:&Point)-> SchnorrPreSig {
+
+//     let k =  sample_rand_chain_scalar();
+//     let mut big_k = g!(k * G).normalize();
+//     big_k = g!(y_pub + big_k).normalize().expect_nonzero(" ");
+
+//     let r = schnorr_hash(kp.pk, big_k, m);    
+    
+//     let mut s = s!(r * kp.sk);
+
+//     s = s!(k + s).expect_nonzero(" ");
+
+//     SchnorrPreSig{
+//         s,
+//         r
+//     }
+
+// }
+
+// pub fn pre_verify(pk: Point, m: &str, pre_sig:&SchnorrPreSig, y_pub:&Point) ->bool {
+
+//     let mut rand = g!(pre_sig.r * pk).normalize();
+//     let gs = g!(pre_sig.s*G).normalize();
+//     rand = g!(gs - rand).normalize().expect_nonzero(" ");
+//     rand = g!(rand+y_pub).normalize().expect_nonzero(" ");
+
+//     let got = schnorr_hash(pk, rand, m);
+
+//     got == pre_sig.r
+// }
+
+// pub fn adapt(pre_sig:&SchnorrPreSig, y:&ChainScalar)-> SchnorrSig{
+
+//     let s = s!(pre_sig.s + y).expect_nonzero(" ");
+//     let r = pre_sig.r.clone();
+
+//     SchnorrSig{
+//         s,
+//         r
+//     }
+// }
