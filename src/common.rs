@@ -25,8 +25,10 @@ pub struct Precomp{
     pub ri_pub: Point
 }
 
+#[derive(Clone)]
 pub struct MessagesAL{
-    pub j: usize,
+    pub origin: usize,
+    pub end: usize,
     pub state: String,
     pub transition: String,
     pub statement: Point,
@@ -184,6 +186,7 @@ pub fn hash_to_bits(cis:&Vec<WESCiphertext>, ri_pub:Vec<Point>, c_omega: ChainSc
 
 }
 
+
 pub fn schnorr_hash(pk:&Point, rand:Point, m:&str) -> ChainScalar {
 
 
@@ -230,7 +233,8 @@ pub fn message_creator(installments:usize) -> Vec<MessagesAL> {
             let statement = g!(witness * G).normalize();
 
             let entry = MessagesAL{
-                j,
+                origin:j,
+                end:i,
                 state,
                 transition,
                 statement,
