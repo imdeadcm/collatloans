@@ -187,6 +187,92 @@ pub fn hash_to_bits(cis:&Vec<WESCiphertext>, ri_pub:Vec<Point>, c_omega: ChainSc
 }
 
 
+pub fn hash_to_bits_fig6(cis:&Vec<Vec<WESCiphertext>>, ri_pub:&Vec<Vec<Point>>, c_omega: &Vec<Vec<ChainScalar>>, x: &Vec<Point>, y_pub: &Vec<Vec<Point>>, sigma_tilde: &Vec<Vec<SchnorrPreSig>> ) ->Vec<bool>{
+
+        // Step 1: Serialize all inputs into bytes
+        let mut serialized_data = Vec::new();
+
+        // Serialize cis
+        for ci in cis {
+            for c in ci{
+                let c1_bytes = Sha256::default()
+                .chain(c.c1.to_compressed())
+                .finalize();
+                serialized_data.extend(c1_bytes);
+                let c2_bytes = gt_to_bytes(&c.c2);
+                serialized_data.extend(c2_bytes);
+                serialized_data.extend(c.c3);
+
+            }
+            
+        }
+    
+        // Serialize ri_pub
+        for points in ri_pub {
+            for point in points{
+
+                let point_bytes = point.to_bytes();
+                serialized_data.extend(point_bytes);
+
+            }
+            
+        }
+    
+        // Serialize c_omega
+        for omegas in c_omega{
+            for omega in omegas{
+
+                let scalar_bytes = omega.to_bytes();
+                serialized_data.extend(scalar_bytes);
+
+            }
+        }
+        
+    
+        // Serialize x
+        for xa in x{
+            let xa_bytes = xa.to_bytes();
+            serialized_data.extend(xa_bytes);
+
+        }
+    
+        // Serialize y_pub
+        for points in y_pub{
+            for point in points{
+
+                let y_pub_bytes = point.to_bytes();
+                serialized_data.extend(y_pub_bytes);
+
+            }
+        }
+        
+    
+        // Serialize presig
+        for pss in sigma_tilde{
+            for ps in pss{
+
+                let sigmas_bytes = ps.s.to_bytes();
+                serialized_data.extend(sigmas_bytes);
+                let sigmar_bytes = ps.r.to_bytes();
+                serialized_data.extend(sigmar_bytes);
+
+            }
+        }
+    
+        // Step 2: Hash the concatenated serialized data
+        let mut hasher = Sha256::new();
+        hasher.update(&serialized_data);
+        let hash_result = hasher.finalize();
+    
+     
+        // Step 3: Convert the hash output to bits
+        bytes_to_bits(&hash_result)
+
+
+
+}
+
+
 pub fn schnorr_hash(pk:&Point, rand:Point, m:&str) -> ChainScalar {
 
 

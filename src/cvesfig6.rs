@@ -2,7 +2,7 @@ use bls12_381::{
     G1Affine, G2Affine, Scalar, Gt,
 };
 
-use crate::common::{sample_rand_chain_scalar, hash_to_bits};
+use crate::common::{sample_rand_chain_scalar, hash_to_bits_fig6};
 use crate::wes::{WESCiphertext, PreComp};
 
 use crate::schnorradaptor::{SchnorrPair, SchnorrPreSig, SchnorrSig};
@@ -168,7 +168,9 @@ impl CVESCiphertextFig6{
 
         // For the moment, does not take the full matrix.
 
-        let bits = hash_to_bits(&m_cis[l_tx-1], m_ri_pub[l_tx-1].clone(), c_omega[l_tx-1][0].clone(), x[l_tx-1], x[0], y_pub[l_tx-1][0], &sigma_tilde[l_tx-1][0]);
+        // let bits = hash_to_bits(&m_cis[l_tx-1], m_ri_pub[l_tx-1].clone(), c_omega[l_tx-1][0].clone(), x[l_tx-1], x[0], y_pub[l_tx-1][0], &sigma_tilde[l_tx-1][0]);
+
+        let bits = hash_to_bits_fig6(&m_cis, &m_ri_pub, &c_omega, &x, &y_pub, &sigma_tilde);
 
 
         // Prepare SOP
@@ -276,7 +278,9 @@ impl CVESCiphertextFig6{
 
         // For the moment, does not take the full matrix.
 
-        let bits = hash_to_bits(&self.m_cis[l_tx-1], self.m_ri_pub[l_tx-1].clone(), self.c_omega[l_tx-1][0].clone(), self.x[l_tx-1], self.x[0], self.y_pub[l_tx-1][0], &self.sigma_tilde[l_tx-1][0]);
+        // let bits = hash_to_bits(&self.m_cis[l_tx-1], self.m_ri_pub[l_tx-1].clone(), self.c_omega[l_tx-1][0].clone(), self.x[l_tx-1], self.x[0], self.y_pub[l_tx-1][0], &self.sigma_tilde[l_tx-1][0]);
+
+        let bits = hash_to_bits_fig6(&self.m_cis, &self.m_ri_pub, &self.c_omega, &self.x, &self.y_pub, &self.sigma_tilde);
 
         // Check encryption and adaptor
 

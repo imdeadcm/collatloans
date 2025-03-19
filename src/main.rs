@@ -18,6 +18,10 @@ struct Args {
     /// Set the value of gamma
     #[clap(short = 'g', long = "gamma", default_value_t = 30)]
     gamma: usize,
+
+    /// Set the number of states
+    #[clap(short = 's', long = "states", default_value_t = 6)]
+    states: usize,
 }
 
 
@@ -31,7 +35,7 @@ fn main() {
 
     let bank_kp = SchnorrPair::new();
 
-    let installments = 12;
+    let installments = args.states;
 
     println!("\nEvaluation: loan setup --oblivious oracle");
 
