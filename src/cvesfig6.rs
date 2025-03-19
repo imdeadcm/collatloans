@@ -2,7 +2,7 @@ use bls12_381::{
     G1Affine, G2Affine, Scalar, Gt,
 };
 
-use crate::common::{sample_rand_chain_scalar, hash_to_bits};
+use crate::common::{sample_rand_chain_scalar, hash_to_bits_fig6};
 use crate::wes::{WESCiphertext, PreComp};
 
 use crate::schnorradaptor::{SchnorrPair, SchnorrPreSig, SchnorrSig};
@@ -28,7 +28,7 @@ pub struct CVESCiphertextFig6 {
     pub vk: Point,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SopUnitFig6 {
     pub i: usize,
     pub j:usize,
@@ -36,7 +36,7 @@ pub struct SopUnitFig6 {
     pub rho: (Scalar, Gt),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SuopUnitFig6 {
     pub i: usize,
     pub j: usize,
@@ -118,9 +118,11 @@ impl CVESCiphertextFig6{
 
         let (y, sigma_tilde, y_pub, c_omega): (Vec<Vec<ChainScalar>>, Vec<Vec<SchnorrPreSig>>, Vec<Vec<Point>>, Vec<Vec<ChainScalar>>) = (1..(l_tx+1))
         .map(|i|{
+            // println!("{}", i);
             let (y_i, sigma_tilde_i, y_pub_i, c_omega_i):(Vec<ChainScalar>, Vec<SchnorrPreSig>, Vec<Point>, Vec<ChainScalar>) = (0..i)
             .map(|j|{
                 // points
+                
                 let sec = &w[i];
                 let y_ij = sample_rand_chain_scalar();
                 let y_pub_ij = g!(y_ij * G).normalize();
@@ -166,7 +168,9 @@ impl CVESCiphertextFig6{
 
         // For the moment, does not take the full matrix.
 
-        let bits = hash_to_bits(&m_cis[l_tx-1], m_ri_pub[l_tx-1].clone(), c_omega[l_tx-1][0].clone(), x[l_tx-1], x[0], y_pub[l_tx-1][0], &sigma_tilde[l_tx-1][0]);
+        // let bits = hash_to_bits(&m_cis[l_tx-1], m_ri_pub[l_tx-1].clone(), c_omega[l_tx-1][0].clone(), x[l_tx-1], x[0], y_pub[l_tx-1][0], &sigma_tilde[l_tx-1][0]);
+
+        let bits = hash_to_bits_fig6(&m_cis, &m_ri_pub, &c_omega, &x, &y_pub, &sigma_tilde);
 
 
         // Prepare SOP
@@ -212,32 +216,34 @@ impl CVESCiphertextFig6{
 
                 let bit = bits[k];
 
-                if bit {
-                    None
+                if !bit {
+                    let si: Vec<ChainScalar> = (0..i)
+                    .map(|j|{
+
+                        
+
+                        let y = y[i-1][j].clone();
+                        let ri = precom[i-1][k].ri.clone();
+
+                        let sij = s!(y+ri).expect_nonzero("they should be two random scalars");
+
+                        sij
+
+                    })
+                    .collect();
+
+                    let ci = m_cis[i-1][k].clone();
+
+                    Some( SuopUnitFig6{
+                        i:k,
+                        j:i,
+                        si,
+                        ci
+                    })
     
                     } else{
 
-                        let si: Vec<ChainScalar> = (0..i)
-                        .map(|j|{
-
-                            let y = y[i-1][j].clone();
-                            let ri = precom[i-1][k].ri.clone();
-
-                            let sij = s!(y+ri).expect_nonzero("they should be two random scalars");
-
-                            sij
-
-                        })
-                        .collect();
-
-                        let ci = m_cis[i-1][k].clone();
-
-                        Some( SuopUnitFig6{
-                            i:k,
-                            j:i,
-                            si,
-                            ci
-                        })
+                       None
                     
 
                     }
@@ -272,7 +278,9 @@ impl CVESCiphertextFig6{
 
         // For the moment, does not take the full matrix.
 
-        let bits = hash_to_bits(&self.m_cis[l_tx-1], self.m_ri_pub[l_tx-1].clone(), self.c_omega[l_tx-1][0].clone(), self.x[l_tx-1], self.x[0], self.y_pub[l_tx-1][0], &self.sigma_tilde[l_tx-1][0]);
+        // let bits = hash_to_bits(&self.m_cis[l_tx-1], self.m_ri_pub[l_tx-1].clone(), self.c_omega[l_tx-1][0].clone(), self.x[l_tx-1], self.x[0], self.y_pub[l_tx-1][0], &self.sigma_tilde[l_tx-1][0]);
+
+        let bits = hash_to_bits_fig6(&self.m_cis, &self.m_ri_pub, &self.c_omega, &self.x, &self.y_pub, &self.sigma_tilde);
 
         // Check encryption and adaptor
 
@@ -298,10 +306,6 @@ impl CVESCiphertextFig6{
                 let sigma_tilde_ij = &self.sigma_tilde[i-1][j];
 
                 sigma_tilde_ij.clone().pre_verify(&self.vk, tx_i, &y_tilde_pub_ij);
-    
-                // let a_res =  pre_verify(self.vk, tx_i, sigma_tilde_ij, &y_tilde_pub_ij);
-    
-                // assert!(a_res == true, "Invalid presignature");
 
             }
         }
@@ -317,45 +321,54 @@ impl CVESCiphertextFig6{
                 if bit {
                     // Bit is 1 (true)
 
-                    if let Some(sop_u) = self.sop.clone().iter()
-                        .flatten() 
-                        .find(|sop_u| sop_u.i == idx) 
-                    {
+                    let sop_list = self.sop.clone();
+
+                    let matching_sops:Vec<&SopUnitFig6> = sop_list
+                    .iter()
+                    .flatten()
+                    .filter(|sop_u| sop_u.i == idx)
+                    .collect();
+
+                    for sop_u in matching_sops{
 
                         let mut m_par = self.m.clone();
 
                         let first_i: Vec<String> = m_par.drain(..sop_u.j).collect();
 
                         self.m_cis[sop_u.j-1][sop_u.i].reconstruct_vector_m(self.pk, first_i, sop_u.ri.clone(), sop_u.rho.0, sop_u.rho.1);
-                    } else {
-                        panic!("CVES verification failed: missing sop");
+
                     }
 
+
                 } else {
-                    if let Some(suop_u) = self.suop.clone().iter()
-                        .flatten() 
-                        .find(|suop_u| suop_u.i == idx) 
-                        
-                    {
 
-                        for i in 0..suop_u.j{
+                    let suop_list = self.suop.clone();
 
-                            let si = suop_u.si[i].clone();
+                    let matching_suops:Vec<&SuopUnitFig6> = suop_list
+                    .iter()
+                    .flatten()
+                    .filter(|suop_u| suop_u.i == idx)
+                    .collect();
+
+                    for suop_u in matching_suops{
+
+                        for i in 1..suop_u.j{
+
+                            let si = suop_u.si[i-1].clone();
 
                             let gs = g!(si * G).normalize();
 
-                            let y_pub_ij = self.y_pub[suop_u.j-1][i].clone();
+                            let y_pub_ij = self.y_pub[suop_u.j-1][i-1].clone();
                             let ri_pub = self.m_ri_pub[suop_u.j-1][idx].clone();
 
                             let check = g!(y_pub_ij + ri_pub).normalize().expect_nonzero("");
 
-                            assert!(check ==gs, "Invalid one time pad");
+                            assert!(check == gs, "Invalid one time pad");
 
 
                         }
-                           
-                    } else {
-                        panic!("CVES verification failed: missing suop");
+
+
                     }
 
                 }
@@ -394,11 +407,11 @@ impl CVESCiphertextFig6{
 
             let sig = self.sigma_tilde[state][origin].clone().adapt(&y_tilde);
 
-            let gsec = g!(sec * G).normalize(); 
-  
-            assert!(gsec== xw, "Invalid witness");
+            let gsec = g!(sec * G).normalize();  
+            
 
             sig.clone().verify(&self.vk, &self.tx[state]);
+            assert!(gsec== xw, "Invalid witness");
 
 
             Some((sec, sig.clone()))

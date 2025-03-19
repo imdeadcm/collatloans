@@ -4,7 +4,7 @@ use atomic_loans::common::{message_creator_involved_oracle};
 
 use atomic_loans::schnorradaptor::SchnorrPair;
 
-use atomic_loans::atomicloan::{prepare_loan};
+use atomic_loans::atomicloan::{prepare_loan, verify_loan, decrypt_state};
 
 use atomic_loans::cvesfig6::CVESCiphertextFig6;
 
@@ -18,6 +18,10 @@ struct Args {
     /// Set the value of gamma
     #[clap(short = 'g', long = "gamma", default_value_t = 30)]
     gamma: usize,
+
+    /// Set the number of states
+    #[clap(short = 's', long = "states", default_value_t = 6)]
+    states: usize,
 }
 
 
@@ -31,13 +35,13 @@ fn main() {
 
     let bank_kp = SchnorrPair::new();
 
-    let installments = 3;
+    let installments = args.states;
 
     println!("\nEvaluation: loan setup --oblivious oracle");
 
     let start_loan = Instant::now();  
 
-    let loan_ciphertexts = prepare_loan(args.gamma.clone(), installments, kp.pk, bank_kp.clone());
+    let (loan_ciphertexts, conditions, _w0) = prepare_loan(args.gamma.clone(), installments, kp.pk, bank_kp.clone());
 
     let end_loan = start_loan.elapsed();
 
@@ -46,6 +50,34 @@ fn main() {
         end_loan, installments
     );
     println!("Number of CVES ciphertexts prepared: {}", loan_ciphertexts.len());
+
+
+    let verify_loan_a = Instant::now();
+
+    verify_loan(args.gamma.clone(), loan_ciphertexts.clone());
+
+    println!(
+        "Total loan vf time: {:?}",
+        verify_loan_a.elapsed()
+    );
+
+    // transition 1
+
+    let transition = conditions[2].clone();
+
+    let wa = conditions[transition.origin].witness.clone();
+
+    let m_sig = kp.clone().sign(&transition.transition.clone());
+
+    let decrypt_loan_a = Instant::now();
+
+    let (_, _) = decrypt_state(loan_ciphertexts.clone(),m_sig, &transition.transition.clone(), wa);
+    println!(
+        "Total loan decrypt time: {:?}",
+        decrypt_loan_a.elapsed()
+    );
+
+
 
     println!("\nEvaluation: loan setup --involved oracle");
 
@@ -81,7 +113,9 @@ fn main() {
 
     let wa = contract_details.witness[1].clone();
 
-    let agg_sig = kp.clone().agg_sign(contract_details.transition.clone());
+    let first_2: Vec<String> = contract_details.transition.clone().drain(..3).collect();
+
+    let agg_sig = kp.clone().agg_sign(first_2);
 
     let decrypt_loan_2 = Instant::now();
 
