@@ -1,11 +1,11 @@
 use bls12_381::{
-    G1Affine, Scalar, Gt,
+    G1Affine, G2Affine, Scalar, Gt,
 };
 
 use crate::common::{sample_rand_chain_scalar, hash_to_bits};
 use crate::wes::{WESCiphertext, PreComp};
 
-use crate::schnorradaptor::{SchnorrPair, SchnorrPreSig};
+use crate::schnorradaptor::{SchnorrPair, SchnorrPreSig, SchnorrSig};
 
 use secp256kfun::{g,s,  Scalar as ChainScalar, G, Point};
 
@@ -85,14 +85,14 @@ impl CVESCiphertextFig6{
 
 
         // We have to produce as many ciphertexts as states (l_tx)
-        let (m_cis, m_ri_pub): (Vec<Vec<WESCiphertext>>, Vec<Vec<Point>>) = (0..l_tx)
+        let (m_cis, m_ri_pub): (Vec<Vec<WESCiphertext>>, Vec<Vec<Point>>) = (1..l_tx+1)
         .map(|i|{
         let (cis, v_ri_pub): (Vec<WESCiphertext>, Vec<Point> ) = (0..gamma)
         .into_par_iter() 
         .map(|j| {
     
             // Get precomputed data
-            let precom_inst = precom[i][j].clone();
+            let precom_inst = precom[i-1][j].clone();
 
             let ri_pub = precom_inst.ri_pub.clone();
 
@@ -173,15 +173,15 @@ impl CVESCiphertextFig6{
         let sop: Vec<Vec<SopUnitFig6>> = (0..gamma)
         .map(|k|{
 
-            let sop_k: Vec<SopUnitFig6> = (0..l_tx)
+            let sop_k: Vec<SopUnitFig6> = (1..l_tx+1)
             .filter_map(|i|{
 
                 let bit = bits[k];
 
                 if bit {
-                    let r1 = precom[i][k].r1;
-                    let r2 = precom[i][k].r2;
-                    let ri = precom[i][k].ri.clone();
+                    let r1 = precom[i-1][k].r1;
+                    let r2 = precom[i-1][k].r2;
+                    let ri = precom[i-1][k].ri.clone();
         
                     let rho = (r1, r2);
 
@@ -207,7 +207,7 @@ impl CVESCiphertextFig6{
         let suop: Vec<Vec<SuopUnitFig6>> = (0..gamma)
         .map(|k|{
 
-            let suop_k: Vec<SuopUnitFig6> = (0..l_tx)
+            let suop_k: Vec<SuopUnitFig6> = (1..l_tx+1)
             .filter_map(|i|{
 
                 let bit = bits[k];
@@ -220,8 +220,8 @@ impl CVESCiphertextFig6{
                         let si: Vec<ChainScalar> = (0..i)
                         .map(|j|{
 
-                            let y = y[i][j].clone();
-                            let ri = precom[i][k].ri.clone();
+                            let y = y[i-1][j].clone();
+                            let ri = precom[i-1][k].ri.clone();
 
                             let sij = s!(y+ri).expect_nonzero("they should be two random scalars");
 
@@ -230,7 +230,7 @@ impl CVESCiphertextFig6{
                         })
                         .collect();
 
-                        let ci = m_cis[i][k].clone();
+                        let ci = m_cis[i-1][k].clone();
 
                         Some( SuopUnitFig6{
                             i:k,
@@ -326,7 +326,7 @@ impl CVESCiphertextFig6{
 
                         let first_i: Vec<String> = m_par.drain(..sop_u.j).collect();
 
-                        self.m_cis[sop_u.j][sop_u.i].reconstruct_vector_m(self.pk, first_i, sop_u.ri.clone(), sop_u.rho.0, sop_u.rho.1);
+                        self.m_cis[sop_u.j-1][sop_u.i].reconstruct_vector_m(self.pk, first_i, sop_u.ri.clone(), sop_u.rho.0, sop_u.rho.1);
                     } else {
                         panic!("CVES verification failed: missing sop");
                     }
@@ -344,8 +344,8 @@ impl CVESCiphertextFig6{
 
                             let gs = g!(si * G).normalize();
 
-                            let y_pub_ij = self.y_pub[suop_u.j][i].clone();
-                            let ri_pub = self.m_ri_pub[suop_u.j][i].clone();
+                            let y_pub_ij = self.y_pub[suop_u.j-1][i].clone();
+                            let ri_pub = self.m_ri_pub[suop_u.j-1][idx].clone();
 
                             let check = g!(y_pub_ij + ri_pub).normalize().expect_nonzero("");
 
@@ -366,6 +366,55 @@ impl CVESCiphertextFig6{
     }
 
 
+    pub fn decrypt(self, sig:G2Affine, wa:ChainScalar, origin: usize, state: usize) -> (ChainScalar, SchnorrSig) {
 
+        let xa = g!(wa * G).normalize();
+
+        assert!(xa == self.x[origin].clone(), "origin and wa must match");
+        assert!(origin<state, "origin must be smaller than state");
+
+        let xw = self.x[state+1].clone();
+
+        if let Some(output) = self.suop.iter()
+        .flatten()
+        .filter(|suop_u| suop_u.j == state+1)
+        .find_map(|suop_u|{
+
+            let r = suop_u.ci.clone().decrypt(sig);
+
+            let s = suop_u.si[origin].clone();
+
+            let y = s!(s - r).expect_nonzero("");
+
+            let y_tilde = s!(y + wa).expect_nonzero("");
+
+            let c_omega = self.c_omega[state][origin].clone();
+
+            let sec = s!(c_omega - y_tilde).expect_nonzero("");
+
+            let sig = self.sigma_tilde[state][origin].clone().adapt(&y_tilde);
+
+            let gsec = g!(sec * G).normalize(); 
+  
+            assert!(gsec== xw, "Invalid witness");
+
+            sig.clone().verify(&self.vk, &self.tx[state]);
+
+
+            Some((sec, sig.clone()))
+            
+
+        })  {
+
+            return output
+
+        } else{
+            panic!("Decryption failed");
+        } ;
+
+
+
+
+    }
 
 }

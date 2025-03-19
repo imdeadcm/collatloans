@@ -255,6 +255,7 @@ pub fn message_creator_involved_oracle(installments:usize) -> LoanContractFig6 {
         let state = format!("state {}", i);
         let witness = sample_rand_chain_scalar();        
         let statement = g!(witness * G).normalize();
+
         (
             state,
             transition,

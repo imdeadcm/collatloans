@@ -31,7 +31,7 @@ fn main() {
 
     let bank_kp = SchnorrPair::new();
 
-    let installments = 2;
+    let installments = 3;
 
     println!("\nEvaluation: loan setup --oblivious oracle");
 
@@ -56,7 +56,7 @@ fn main() {
 
     let precom_fig6 = CVESCiphertextFig6::precompute(args.gamma.clone(), installments);
 
-    let cves_fig6 = CVESCiphertextFig6::enc_cs_from_precom(args.gamma.clone(), kp.pk, contract_details.witness, contract_details.transition, bank_kp.clone(), contract_details.state, &precom_fig6);
+    let cves_fig6 = CVESCiphertextFig6::enc_cs_from_precom(args.gamma.clone(), kp.pk, contract_details.witness.clone(), contract_details.transition.clone(), bank_kp.clone(), contract_details.state, &precom_fig6);
 
     let end_loan_2 = start_loan_2.elapsed();
 
@@ -67,6 +67,28 @@ fn main() {
     );
     println!("Number of CVES ciphertexts prepared: {}", cves_fig6.m_cis.len());
 
+    let verify_loan_2 = Instant::now();
+
     cves_fig6.clone().verify(args.gamma.clone());
+
+    println!(
+        "Total loan vf time: {:?}",
+        verify_loan_2.elapsed()
+    );
+
+
+    // transition 1 - 2:
+
+    let wa = contract_details.witness[1].clone();
+
+    let agg_sig = kp.clone().agg_sign(contract_details.transition.clone());
+
+    let decrypt_loan_2 = Instant::now();
+
+    let (_, _) = cves_fig6.clone().decrypt(agg_sig, wa, 1, 2);
+    println!(
+        "Total loan decrypt time: {:?}",
+        decrypt_loan_2.elapsed()
+    );
 
 }

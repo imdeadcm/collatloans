@@ -12,6 +12,7 @@ pub struct SchnorrPair {
     pub pk: Point,
 }
 
+#[derive(Clone)]
 pub struct SchnorrSig {
     s: ChainScalar,
     r: ChainScalar,
