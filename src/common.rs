@@ -184,7 +184,7 @@ pub fn hash_to_bits(cis:&Vec<WESCiphertext>, ri_pub:Vec<Point>, c_omega: ChainSc
 
 }
 
-pub fn schnorr_hash(pk:Point, rand:Point, m:&str) -> ChainScalar {
+pub fn schnorr_hash(pk:&Point, rand:Point, m:&str) -> ChainScalar {
 
 
     // Step 1. Serialize inputs

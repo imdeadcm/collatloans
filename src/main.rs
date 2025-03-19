@@ -2,7 +2,7 @@ use atomic_loans::signbls::BLSKeyPair;
 
 use atomic_loans::common::{message_creator_involved_oracle};
 
-use atomic_loans::schnorradaptor::{kgen as adaptor_kgen};
+use atomic_loans::schnorradaptor::SchnorrPair;
 
 use atomic_loans::atomicloan::{prepare_loan};
 
@@ -29,7 +29,7 @@ fn main() {
 
     let kp = BLSKeyPair::new();
 
-    let bank_kp = adaptor_kgen();
+    let bank_kp = SchnorrPair::new();
 
     let installments = 2;
 
