@@ -206,46 +206,6 @@ impl CVESCiphertextOb {
 
         });
 
-        // (0..gamma).into_par_iter().for_each(|idx|{
-            
-        //     let bit = bits[idx];
-    
-        //     // Check that SOP and SUOP have the correct indices
-        //     if bit {
-        //         // Bit is 1 (true)
-    
-        //         if let Some(sop_unit) = self.sop.iter().find(|unit| unit.i == idx) {
-
-        //             self.cis[idx].reconstruct(pair, sop_unit.ri.clone(), sop_unit.rho.0, sop_unit.rho.1);    
-                    
-        //         } else {
-        //             panic!("CVES verification failed")
-        //         }
-    
-                
-        //     } else {
-        //         // Bit is 0 (false)
-    
-        //         if let Some(suop_unit) = self.suop.iter().find(|unit| unit.i == idx) {
-    
-        //             let gs = g!(suop_unit.si * G).normalize();
-    
-        //             let ri_pub = self.v_ri_pub[idx];
-    
-        //             let check2 = g!(self.y_pub + ri_pub).normalize().expect_nonzero("They should be two random points");
-    
-        //             assert!(gs == check2, "CVES verification failed: invalid si");
-                    
-        //         } else {
-        //             panic!("CVES verification failed")
-        //         }
-    
-                
-        //     }
-    
-    
-        // });
-
     }
 
 
