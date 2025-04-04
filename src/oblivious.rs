@@ -1,8 +1,8 @@
 use bls12_381::{
-    G1Affine, G2Affine, Scalar, Gt,
+    G1Affine, G2Affine, Scalar, Gt, pairing
 };
 
-use crate::common::{sample_rand_chain_scalar, hash_to_bits};
+use crate::common::{sample_rand_chain_scalar, hash_to_bits,hash_to_g2};
 use crate::wes::{WESCiphertext, PreComp};
 
 use crate::schnorradaptor::{SchnorrPair, SchnorrPreSig, SchnorrSig};
@@ -12,11 +12,11 @@ use secp256kfun::{g,s,  Scalar as ChainScalar, G, Point};
 use rayon::prelude::*;
 
 #[derive(Clone)]
-pub struct CVESCiphertextFig5 {
+pub struct CVESCiphertextOb {
     pub cis: Vec<WESCiphertext>,
     pub c_omega: ChainScalar,
-    pub sop: Vec<SopUnitFig5>,
-    pub suop: Vec<SuopUnitFig5>,
+    pub sop: Vec<SopUnitOb>,
+    pub suop: Vec<SuopUnitOb>,
     pub v_ri_pub: Vec<Point>,
     pub xa: Point,
     pub xw: Point,
@@ -29,20 +29,20 @@ pub struct CVESCiphertextFig5 {
 }
 
 #[derive(Clone)]
-pub struct SopUnitFig5 {
+pub struct SopUnitOb {
     pub i: usize,
     pub ri: ChainScalar,
     pub rho: (Scalar, Gt),
 }
 
 #[derive(Clone)]
-pub struct SuopUnitFig5 {
+pub struct SuopUnitOb {
     pub i: usize,
     pub si: ChainScalar,
     pub ci: WESCiphertext,
 }
 
-impl CVESCiphertextFig5 {
+impl CVESCiphertextOb {
 
     // precompute parameters
     pub fn precompute(gamma: usize) -> Vec<PreComp> {
@@ -60,9 +60,11 @@ impl CVESCiphertextFig5 {
     }
 
     // Finalice encryption from precomputation
-    pub fn enc_cs_from_precom(gamma: usize, pk: G1Affine, wa: ChainScalar, m: &str, sec:ChainScalar, a_kp:SchnorrPair, tx:&str, precom: &Vec<PreComp>) -> CVESCiphertextFig5{
+    pub fn enc_cs_from_precom(gamma: usize, pk: G1Affine, wa: ChainScalar, m: &str, sec:ChainScalar, a_kp:SchnorrPair, tx:&str, precom: &Vec<PreComp>) -> CVESCiphertextOb{
 
         let vk = a_kp.pk;
+
+        let pair = pairing(&pk, &hash_to_g2(m));
 
         // Parallelize the loop using rayon to produce all WES ciphertexts
         let (cis, v_ri_pub): (Vec<WESCiphertext>, Vec<Point> ) = (0..gamma)
@@ -75,7 +77,7 @@ impl CVESCiphertextFig5 {
             let ri_pub = precom.ri_pub.clone();
     
             // finalize WES ciphertexts
-            (WESCiphertext::new_from_precom(precom, pk, m),
+            (WESCiphertext::new_from_precom(precom, pair),
             ri_pub)
     
         })
@@ -90,8 +92,6 @@ impl CVESCiphertextFig5 {
         let xw = g!(sec * G).normalize();
         let y_tilde_pub = g!(y_pub + xa).normalize().expect_nonzero("They are random points");
 
-        // let sigma_tilde = pre_sign(&a_kp, tx, &y_tilde_pub); 
-
         let sigma_tilde = a_kp.pre_sign(tx, &y_tilde_pub); 
          
         let mut c_omega = s!(y + wa).expect_nonzero("random scalar");    
@@ -101,8 +101,8 @@ impl CVESCiphertextFig5 {
  
         let bits = hash_to_bits(&cis, v_ri_pub.clone(), c_omega.clone(), xa, xw, y_pub, &sigma_tilde);
     
-        let mut sop=Vec::<SopUnitFig5>::new();
-        let mut suop=Vec::<SuopUnitFig5>::new();
+        let mut sop=Vec::<SopUnitOb>::new();
+        let mut suop=Vec::<SuopUnitOb>::new();
 
         for i in 0..gamma {
  
@@ -117,7 +117,7 @@ impl CVESCiphertextFig5 {
     
                 let rho = (r1, r2);
     
-                sop.push(SopUnitFig5 {i, ri, rho});
+                sop.push(SopUnitOb {i, ri, rho});
             } else {
                 // Bit is 0 (false), fill SUOP
     
@@ -127,11 +127,11 @@ impl CVESCiphertextFig5 {
     
                 let ci = cis[i].clone();
     
-                suop.push(SuopUnitFig5 {i,si, ci});
+                suop.push(SuopUnitOb {i,si, ci});
             }
         }
 
-        CVESCiphertextFig5 {
+        CVESCiphertextOb {
             cis,
             c_omega,
             sop,
@@ -152,7 +152,9 @@ impl CVESCiphertextFig5 {
 
 
     // Verify a CVES ciphertext. Assume that the user checks that the public elements (m, tx, pk, vk) in the ciphertext are correct.
-    pub fn verify(self, gamma: usize) ->() {
+    pub fn verify(self) ->() {
+
+        let pair = pairing(&self.pk, &hash_to_g2(&self.m));
 
         let bits = hash_to_bits(&self.cis, self.v_ri_pub.clone(), self.c_omega.clone(), self.xa, self.xw, self.y_pub.clone(), &self.sigma_tilde );
 
@@ -170,53 +172,79 @@ impl CVESCiphertextFig5 {
     
         let y_tilde_pub = g!(y2 + self.xa).normalize().expect_nonzero("");
     
-        // let a_res =  pre_verify(self.vk, &self.tx, &self.sigma_tilde, &y_tilde_pub);
 
         self.sigma_tilde.pre_verify(&self.vk, &self.tx,&y_tilde_pub);
     
-        // assert!(a_res == true, "Invalid presignature");
-
 
         // Cut and choose verification
-        (0..gamma).into_par_iter().for_each(|idx|{
-            
-            let bit = bits[idx];
-    
-            // Check that SOP and SUOP have the correct indices
-            if bit {
-                // Bit is 1 (true)
-    
-                if let Some(sop_unit) = self.sop.iter().find(|unit| unit.i == idx) {
 
-                    self.cis[idx].reconstruct(self.pk, &self.m, sop_unit.ri.clone(), sop_unit.rho.0, sop_unit.rho.1);    
-                    
-                } else {
-                    panic!("CVES verification failed")
-                }
-    
-                
-            } else {
-                // Bit is 0 (false)
-    
-                if let Some(suop_unit) = self.suop.iter().find(|unit| unit.i == idx) {
-    
-                    let gs = g!(suop_unit.si * G).normalize();
-    
-                    let ri_pub = self.v_ri_pub[idx];
-    
-                    let check2 = g!(self.y_pub + ri_pub).normalize().expect_nonzero("They should be two random points");
-    
-                    assert!(gs == check2, "CVES verification failed: invalid si");
-                    
-                } else {
-                    panic!("CVES verification failed")
-                }
-    
-                
-            }
-    
-    
+        // SOP verify
+        let _ = self.sop
+        .into_par_iter()
+        .for_each(|sop_u|{
+            assert!(bits[sop_u.i], "Invalid SOP");
+
+            self.cis[sop_u.i].reconstruct(pair, sop_u.ri.clone(), sop_u.rho.0, sop_u.rho.1);
+
         });
+
+        // SUOP verify
+
+        let _ = self.suop
+        .into_par_iter()
+        .for_each(|suop_u|{
+
+            assert!(!bits[suop_u.i], "Invalid SUOP");
+
+            let gs = g!(suop_u.si * G).normalize();
+    
+            let ri_pub = self.v_ri_pub[suop_u.i];
+
+            let check2 = g!(self.y_pub + ri_pub).normalize().expect_nonzero("They should be two random points");
+
+            assert!(gs == check2, "CVES verification failed: invalid si");
+
+        });
+
+        // (0..gamma).into_par_iter().for_each(|idx|{
+            
+        //     let bit = bits[idx];
+    
+        //     // Check that SOP and SUOP have the correct indices
+        //     if bit {
+        //         // Bit is 1 (true)
+    
+        //         if let Some(sop_unit) = self.sop.iter().find(|unit| unit.i == idx) {
+
+        //             self.cis[idx].reconstruct(pair, sop_unit.ri.clone(), sop_unit.rho.0, sop_unit.rho.1);    
+                    
+        //         } else {
+        //             panic!("CVES verification failed")
+        //         }
+    
+                
+        //     } else {
+        //         // Bit is 0 (false)
+    
+        //         if let Some(suop_unit) = self.suop.iter().find(|unit| unit.i == idx) {
+    
+        //             let gs = g!(suop_unit.si * G).normalize();
+    
+        //             let ri_pub = self.v_ri_pub[idx];
+    
+        //             let check2 = g!(self.y_pub + ri_pub).normalize().expect_nonzero("They should be two random points");
+    
+        //             assert!(gs == check2, "CVES verification failed: invalid si");
+                    
+        //         } else {
+        //             panic!("CVES verification failed")
+        //         }
+    
+                
+        //     }
+    
+    
+        // });
 
     }
 
@@ -237,12 +265,16 @@ impl CVESCiphertextFig5 {
                 let sec = s!(self.c_omega - y).expect_nonzero("");
     
                 let final_sec = s!(sec - wa).expect_nonzero("");
+
+                let gsec = g!(final_sec * G).normalize(); 
     
                 let y_tilde = s!(y + wa).expect_nonzero("");
-    
-                // let sig = adapt(&self.sigma_tilde, &y_tilde);
 
                 let sig = self.sigma_tilde.adapt(&y_tilde);
+
+                sig.clone().verify(&self.vk, &self.tx);
+
+                assert!(gsec== self.xw, "Invalid witness");
     
                 return (final_sec, sig);
             }

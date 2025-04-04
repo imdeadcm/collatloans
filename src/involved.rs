@@ -1,8 +1,8 @@
 use bls12_381::{
-    G1Affine, G2Affine, Scalar, Gt,
+    G1Affine, G2Affine, G2Projective, Scalar, Gt, pairing
 };
 
-use crate::common::{sample_rand_chain_scalar, hash_to_bits_fig6};
+use crate::common::{sample_rand_chain_scalar, hash_to_bits_in, hash_to_g2};
 use crate::wes::{WESCiphertext, PreComp};
 
 use crate::schnorradaptor::{SchnorrPair, SchnorrPreSig, SchnorrSig};
@@ -13,11 +13,11 @@ use rayon::prelude::*;
 
 
 #[derive(Clone)]
-pub struct CVESCiphertextFig6 {
+pub struct CVESCiphertextIn {
     pub m_cis: Vec<Vec<WESCiphertext>>,
     pub c_omega: Vec<Vec<ChainScalar>>,
-    pub sop: Vec<Vec<SopUnitFig6>>,
-    pub suop: Vec<Vec<SuopUnitFig6>>,
+    pub sop: Vec<Vec<SopUnitIn>>,
+    pub suop: Vec<Vec<SuopUnitIn>>,
     pub m_ri_pub: Vec<Vec<Point>>,
     pub x: Vec<Point>,
     pub y_pub: Vec<Vec<Point>>,
@@ -29,7 +29,7 @@ pub struct CVESCiphertextFig6 {
 }
 
 #[derive(Clone, Debug)]
-pub struct SopUnitFig6 {
+pub struct SopUnitIn {
     pub i: usize,
     pub j:usize,
     pub ri: ChainScalar,
@@ -37,14 +37,14 @@ pub struct SopUnitFig6 {
 }
 
 #[derive(Clone, Debug)]
-pub struct SuopUnitFig6 {
+pub struct SuopUnitIn {
     pub i: usize,
     pub j: usize,
     pub si: Vec<ChainScalar>,
     pub ci: WESCiphertext,
 }
 
-impl CVESCiphertextFig6{
+impl CVESCiphertextIn{
 
     pub fn precompute(gamma: usize, l: usize) -> Vec<Vec<PreComp>> {
 
@@ -69,7 +69,7 @@ impl CVESCiphertextFig6{
 
 
 
-    pub fn enc_cs_from_precom(gamma: usize, pk: G1Affine, w: Vec<ChainScalar>, m: Vec<String>, a_kp:SchnorrPair, tx:Vec<String>, precom: &Vec<Vec<PreComp>>) -> CVESCiphertextFig6{
+    pub fn enc_cs_from_precom(gamma: usize, pk: G1Affine, w: Vec<ChainScalar>, m: Vec<String>, a_kp:SchnorrPair, tx:Vec<String>, precom: &Vec<Vec<PreComp>>) -> CVESCiphertextIn{
 
         // w has scalars w0 until wi. wi is w[w.len()-1] and is the secret.
         // We encrypt with respect to all w from 0 to w.len()-2
@@ -87,6 +87,24 @@ impl CVESCiphertextFig6{
         // We have to produce as many ciphertexts as states (l_tx)
         let (m_cis, m_ri_pub): (Vec<Vec<WESCiphertext>>, Vec<Vec<Point>>) = (1..l_tx+1)
         .map(|i|{
+            // all messages up to i
+
+            let mut m_par = m.clone();
+
+            let first_i: Vec<String> = m_par.drain(..i).collect();
+
+            let mut agg_m_hash = G2Projective::identity();
+            for att in first_i{
+
+                let affine = hash_to_g2(&att);
+
+                agg_m_hash = agg_m_hash + G2Projective::from(affine);
+
+            }
+
+            let agg_m_hash = G2Affine::from(agg_m_hash);
+
+            let pair = pairing(&pk, &agg_m_hash);
         let (cis, v_ri_pub): (Vec<WESCiphertext>, Vec<Point> ) = (0..gamma)
         .into_par_iter() 
         .map(|j| {
@@ -96,14 +114,10 @@ impl CVESCiphertextFig6{
 
             let ri_pub = precom_inst.ri_pub.clone();
 
-            // all messages up to i
-
-            let mut m_par = m.clone();
-
-            let first_i: Vec<String> = m_par.drain(..i).collect();
+            
     
             // finalize WES ciphertexts
-            (WESCiphertext::new_from_precom_vector_m(precom_inst, pk, first_i),
+            (WESCiphertext::new_from_precom_vector_m(precom_inst, pair),
             ri_pub)
     
         })
@@ -118,7 +132,7 @@ impl CVESCiphertextFig6{
 
         let (y, sigma_tilde, y_pub, c_omega): (Vec<Vec<ChainScalar>>, Vec<Vec<SchnorrPreSig>>, Vec<Vec<Point>>, Vec<Vec<ChainScalar>>) = (1..(l_tx+1))
         .map(|i|{
-            // println!("{}", i);
+            
             let (y_i, sigma_tilde_i, y_pub_i, c_omega_i):(Vec<ChainScalar>, Vec<SchnorrPreSig>, Vec<Point>, Vec<ChainScalar>) = (0..i)
             .map(|j|{
                 // points
@@ -131,11 +145,10 @@ impl CVESCiphertextFig6{
                 let y_tilde_pub_ij = g!(y_pub_ij + xa).normalize().expect_nonzero("They are random points");
 
                 // adaptor
-                // let sigma_tilde_ij = pre_sign(&a_kp, &tx[i-1], &y_tilde_pub_ij); 
 
                 let sigma_tilde_ij = a_kp.clone().pre_sign(&tx[i-1], &y_tilde_pub_ij); 
 
-                // encryption. replace in future by PKE
+                // encryption
                 let mut c_omega_ij = s!(y_ij + wa).expect_nonzero("random scalar");    
                 c_omega_ij = s!(c_omega_ij + sec).expect_nonzero(" random scalars");
                 (
@@ -166,18 +179,14 @@ impl CVESCiphertextFig6{
         .collect();
 
 
-        // For the moment, does not take the full matrix.
-
-        // let bits = hash_to_bits(&m_cis[l_tx-1], m_ri_pub[l_tx-1].clone(), c_omega[l_tx-1][0].clone(), x[l_tx-1], x[0], y_pub[l_tx-1][0], &sigma_tilde[l_tx-1][0]);
-
-        let bits = hash_to_bits_fig6(&m_cis, &m_ri_pub, &c_omega, &x, &y_pub, &sigma_tilde);
+        let bits = hash_to_bits_in(&m_cis, &m_ri_pub, &c_omega, &x, &y_pub, &sigma_tilde);
 
 
         // Prepare SOP
-        let sop: Vec<Vec<SopUnitFig6>> = (0..gamma)
+        let sop: Vec<Vec<SopUnitIn>> = (0..gamma)
         .map(|k|{
 
-            let sop_k: Vec<SopUnitFig6> = (1..l_tx+1)
+            let sop_k: Vec<SopUnitIn> = (1..l_tx+1)
             .filter_map(|i|{
 
                 let bit = bits[k];
@@ -189,7 +198,7 @@ impl CVESCiphertextFig6{
         
                     let rho = (r1, r2);
 
-                    Some(SopUnitFig6{
+                    Some(SopUnitIn{
                         i: k,
                         j: i,
                         ri,
@@ -208,10 +217,10 @@ impl CVESCiphertextFig6{
 
         // Prepare SUOP
 
-        let suop: Vec<Vec<SuopUnitFig6>> = (0..gamma)
+        let suop: Vec<Vec<SuopUnitIn>> = (0..gamma)
         .map(|k|{
 
-            let suop_k: Vec<SuopUnitFig6> = (1..l_tx+1)
+            let suop_k: Vec<SuopUnitIn> = (1..l_tx+1)
             .filter_map(|i|{
 
                 let bit = bits[k];
@@ -234,7 +243,7 @@ impl CVESCiphertextFig6{
 
                     let ci = m_cis[i-1][k].clone();
 
-                    Some( SuopUnitFig6{
+                    Some( SuopUnitIn{
                         i:k,
                         j:i,
                         si,
@@ -254,7 +263,7 @@ impl CVESCiphertextFig6{
         })
         .collect();
 
-        CVESCiphertextFig6 {
+        CVESCiphertextIn {
             m_cis,
             c_omega,
             sop,
@@ -272,15 +281,11 @@ impl CVESCiphertextFig6{
  
     }
 
-    pub fn verify(self, gamma: usize) ->() {
+    pub fn verify(self) ->() {
 
         let l_tx = self.tx.len();
 
-        // For the moment, does not take the full matrix.
-
-        // let bits = hash_to_bits(&self.m_cis[l_tx-1], self.m_ri_pub[l_tx-1].clone(), self.c_omega[l_tx-1][0].clone(), self.x[l_tx-1], self.x[0], self.y_pub[l_tx-1][0], &self.sigma_tilde[l_tx-1][0]);
-
-        let bits = hash_to_bits_fig6(&self.m_cis, &self.m_ri_pub, &self.c_omega, &self.x, &self.y_pub, &self.sigma_tilde);
+        let bits = hash_to_bits_in(&self.m_cis, &self.m_ri_pub, &self.c_omega, &self.x, &self.y_pub, &self.sigma_tilde);
 
         // Check encryption and adaptor
 
@@ -311,69 +316,137 @@ impl CVESCiphertextFig6{
         }
 
 
+        // Prepare the pairings of each state for the aggregated messages
+
+        let mut pairs:Vec<Gt>= vec![];
+
+        for i in 1..l_tx+1{
+
+            let mut m_par = self.m.clone();
+
+            let first_i: Vec<String> = m_par.drain(..i).collect();
+
+            let mut agg_m_hash = G2Projective::identity();
+            for att in first_i{
+
+                let affine = hash_to_g2(&att);
+
+                agg_m_hash = agg_m_hash + G2Projective::from(affine);
+
+            }
+
+            let agg_m_hash = G2Affine::from(agg_m_hash);
+
+            let pair = pairing(&self.pk, &agg_m_hash);
+
+            pairs.push(pair);
+        
+        }
+
+
         // Verify cut and choose
 
-        (0..gamma).into_par_iter().for_each(|idx|{
+
+        let _ = self.sop
+        .into_par_iter()
+        .flatten()
+        .for_each(|sop_u|{
+
+            assert!(bits[sop_u.i], "Invalid SOP");
+
+            let my_pair = pairs[sop_u.j-1].clone();
+
+            self.m_cis[sop_u.j-1][sop_u.i].reconstruct_vector_m(my_pair, sop_u.ri.clone(), sop_u.rho.0, sop_u.rho.1);
+
+        });
+
+        let _ = self.suop
+        .into_par_iter()
+        .flatten()
+        .for_each(|suop_u|{
+
+            assert!(!bits[suop_u.i], "Invalid SUOP");
+
+            for i in 1..suop_u.j{
+
+                let si = suop_u.si[i-1].clone();
+
+                let gs = g!(si * G).normalize();
+
+                let y_pub_ij = self.y_pub[suop_u.j-1][i-1].clone();
+                let ri_pub = self.m_ri_pub[suop_u.j-1][suop_u.i].clone();
+
+                let check = g!(y_pub_ij + ri_pub).normalize().expect_nonzero("");
+
+                assert!(check == gs, "Invalid one time pad");
+
+
+            }
+
+        });
+
+
+
+        // (0..gamma).into_par_iter().for_each(|idx|{
             
-                let bit = bits[idx];
+        //         let bit = bits[idx];
         
-                // Check that SOP and SUOP have the correct indices
-                if bit {
-                    // Bit is 1 (true)
+        //         // Check that SOP and SUOP have the correct indices
+        //         if bit {
+        //             // Bit is 1 (true)
 
-                    let sop_list = self.sop.clone();
+        //             let sop_list = self.sop.clone();
 
-                    let matching_sops:Vec<&SopUnitFig6> = sop_list
-                    .iter()
-                    .flatten()
-                    .filter(|sop_u| sop_u.i == idx)
-                    .collect();
+        //             let matching_sops:Vec<&SopUnitIn> = sop_list
+        //             .iter()
+        //             .flatten()
+        //             .filter(|sop_u| sop_u.i == idx)
+        //             .collect();
 
-                    for sop_u in matching_sops{
-
-                        let mut m_par = self.m.clone();
-
-                        let first_i: Vec<String> = m_par.drain(..sop_u.j).collect();
-
-                        self.m_cis[sop_u.j-1][sop_u.i].reconstruct_vector_m(self.pk, first_i, sop_u.ri.clone(), sop_u.rho.0, sop_u.rho.1);
-
-                    }
+        //             for sop_u in matching_sops{
 
 
-                } else {
+        //                 let my_pair = pairs[sop_u.j-1].clone();
 
-                    let suop_list = self.suop.clone();
+        //                 self.m_cis[sop_u.j-1][sop_u.i].reconstruct_vector_m(my_pair, sop_u.ri.clone(), sop_u.rho.0, sop_u.rho.1);
 
-                    let matching_suops:Vec<&SuopUnitFig6> = suop_list
-                    .iter()
-                    .flatten()
-                    .filter(|suop_u| suop_u.i == idx)
-                    .collect();
-
-                    for suop_u in matching_suops{
-
-                        for i in 1..suop_u.j{
-
-                            let si = suop_u.si[i-1].clone();
-
-                            let gs = g!(si * G).normalize();
-
-                            let y_pub_ij = self.y_pub[suop_u.j-1][i-1].clone();
-                            let ri_pub = self.m_ri_pub[suop_u.j-1][idx].clone();
-
-                            let check = g!(y_pub_ij + ri_pub).normalize().expect_nonzero("");
-
-                            assert!(check == gs, "Invalid one time pad");
+        //             }
 
 
-                        }
+        //         } else {
+
+        //             let suop_list = self.suop.clone();
+
+        //             let matching_suops:Vec<&SuopUnitIn> = suop_list
+        //             .iter()
+        //             .flatten()
+        //             .filter(|suop_u| suop_u.i == idx)
+        //             .collect();
+
+        //             for suop_u in matching_suops{
+
+        //                 for i in 1..suop_u.j{
+
+        //                     let si = suop_u.si[i-1].clone();
+
+        //                     let gs = g!(si * G).normalize();
+
+        //                     let y_pub_ij = self.y_pub[suop_u.j-1][i-1].clone();
+        //                     let ri_pub = self.m_ri_pub[suop_u.j-1][idx].clone();
+
+        //                     let check = g!(y_pub_ij + ri_pub).normalize().expect_nonzero("");
+
+        //                     assert!(check == gs, "Invalid one time pad");
 
 
-                    }
+        //                 }
 
-                }
 
-                });
+        //             }
+
+        //         }
+
+        //         });
 
 
     }

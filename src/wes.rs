@@ -91,9 +91,9 @@ impl WESCiphertext{
     }
 
     // Function to produce a ciphertext on a random message using as encryption key pk and m.
-    pub fn new_from_precom(pre:PreComp, pk:G1Affine, m: &str) -> WESCiphertext {
+    pub fn new_from_precom(pre:PreComp, m: Gt) -> WESCiphertext {
 
-        let c2 = pairing(&pk, &hash_to_g2(m))*pre.r1 + pre.r2;
+        let c2 = m*pre.r1 + pre.r2;
 
         let c1 = pre.c1;
 
@@ -107,20 +107,9 @@ impl WESCiphertext{
 
     }
 
-    pub fn new_from_precom_vector_m(pre:PreComp, pk:G1Affine, m: Vec<String>) -> WESCiphertext {
-
-        let mut agg_m_hash = G2Projective::identity();
-        for att in m{
-
-            let affine = hash_to_g2(&att);
-
-            agg_m_hash = agg_m_hash + G2Projective::from(affine);
-
-        }
-
-        let agg_m_hash = G2Affine::from(agg_m_hash);
+    pub fn new_from_precom_vector_m(pre:PreComp, m: Gt) -> WESCiphertext {
         
-        let c2 = pairing(&pk, &agg_m_hash)*pre.r1 + pre.r2;
+        let c2 = m*pre.r1 + pre.r2;
 
         let c1 = pre.c1;
 
@@ -153,13 +142,13 @@ impl WESCiphertext{
         }
 
     // Given the random secret and the random coins, check if a given ciphertext is well-formed (for a vector of messages)
-    pub fn reconstruct(self, pk: G1Affine, m: &str, sec:ChainScalar, r1: Scalar, r2: Gt) -> () {
+    pub fn reconstruct(self, m: Gt, sec:ChainScalar, r1: Scalar, r2: Gt) -> () {
 
         let new_c1 = G1Affine::from(G1Affine::generator() * r1);
 
         
 
-        let new_c2 = pairing(&pk, &hash_to_g2(m))*r1 + r2;
+        let new_c2 = m*r1 + r2;
 
         let mut h_xor_sec = gt_to_bytes(&r2);
 
@@ -175,22 +164,22 @@ impl WESCiphertext{
 
     }
 
-    pub fn reconstruct_vector_m(self, pk: G1Affine, m: Vec<String>, sec:ChainScalar, r1: Scalar, r2: Gt) -> () {
+    pub fn reconstruct_vector_m(self, m: Gt, sec:ChainScalar, r1: Scalar, r2: Gt) -> () {
 
         let new_c1 = G1Affine::from(G1Affine::generator() * r1);
 
-        let mut agg_m_hash = G2Projective::identity();
-        for att in m{
+        // let mut agg_m_hash = G2Projective::identity();
+        // for att in m{
 
-            let affine = hash_to_g2(&att);
+        //     let affine = hash_to_g2(&att);
 
-            agg_m_hash = agg_m_hash + G2Projective::from(affine);
+        //     agg_m_hash = agg_m_hash + G2Projective::from(affine);
 
-        }
+        // }
 
-        let agg_m_hash = G2Affine::from(agg_m_hash);
+        // let agg_m_hash = G2Affine::from(agg_m_hash);
 
-        let new_c2 = pairing(&pk, &agg_m_hash)*r1 + r2;
+        let new_c2 = m*r1 + r2;
 
         let mut h_xor_sec = gt_to_bytes(&r2);
 
