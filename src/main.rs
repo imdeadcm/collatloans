@@ -1,12 +1,10 @@
 use atomic_loans::signbls::BLSKeyPair; 
 
-use atomic_loans::common::{message_creator_involved_oracle};
+use atomic_loans::common::{message_creator_involved_oracle, message_creator,prepare_loan, verify_loan};
 
 use atomic_loans::schnorradaptor::SchnorrPair;
 
-use atomic_loans::atomicloan::{prepare_loan, verify_loan, decrypt_state};
-
-use atomic_loans::cvesfig6::CVESCiphertextFig6;
+use atomic_loans::involved::CVESCiphertextIn;
 
 use std::time::Instant;
 
@@ -37,27 +35,36 @@ fn main() {
 
     let installments = args.states;
 
-    println!("\nEvaluation: loan setup --oblivious oracle");
+    println!(
+        "\nNumber of states: {}",
+        installments
+    );
+    println!("\n-----Oblivious oracle-----");
+    
+    
 
-    let start_loan = Instant::now();  
+    let conditions = message_creator(installments, args.gamma.clone());
 
-    let (loan_ciphertexts, conditions, _w0) = prepare_loan(args.gamma.clone(), installments, kp.pk, bank_kp.clone());
+    let start_loan = Instant::now();      
+
+    let (loan_ciphertexts, _w0) = prepare_loan(args.gamma.clone(), conditions.clone(), kp.pk, bank_kp.clone());
 
     let end_loan = start_loan.elapsed();
+    println!("Number of CVES ciphertexts prepared: {}", loan_ciphertexts.len());
 
     println!(
-        "Total loan setup time: {:?} for {} installments",
-        end_loan, installments
+        "Setup time with precomputation: {:?}",
+        end_loan
     );
-    println!("Number of CVES ciphertexts prepared: {}", loan_ciphertexts.len());
+    
 
 
     let verify_loan_a = Instant::now();
 
-    verify_loan(args.gamma.clone(), loan_ciphertexts.clone());
+    verify_loan(loan_ciphertexts.clone());
 
     println!(
-        "Total loan vf time: {:?}",
+        "Verification time: {:?}",
         verify_loan_a.elapsed()
     );
 
@@ -69,42 +76,44 @@ fn main() {
 
     let m_sig = kp.clone().sign(&transition.transition.clone());
 
+    let cves = loan_ciphertexts[2].clone();
+
     let decrypt_loan_a = Instant::now();
 
-    let (_, _) = decrypt_state(loan_ciphertexts.clone(),m_sig, &transition.transition.clone(), wa);
+    let (_,_) = cves.decrypt(m_sig, wa);
     println!(
-        "Total loan decrypt time: {:?}",
+        "Decryption time: {:?}",
         decrypt_loan_a.elapsed()
     );
 
 
 
-    println!("\nEvaluation: loan setup --involved oracle");
+    println!("\n-----Involved oracle-----");
 
-
-
-    let start_loan_2 = Instant::now();
+    
     let contract_details = message_creator_involved_oracle(installments);
 
-    let precom_fig6 = CVESCiphertextFig6::precompute(args.gamma.clone(), installments);
+    let precom_in = CVESCiphertextIn::precompute(args.gamma.clone(), installments);
 
-    let cves_fig6 = CVESCiphertextFig6::enc_cs_from_precom(args.gamma.clone(), kp.pk, contract_details.witness.clone(), contract_details.transition.clone(), bank_kp.clone(), contract_details.state, &precom_fig6);
+    let start_loan_2 = Instant::now();
+    let cves_in = CVESCiphertextIn::enc_cs_from_precom(args.gamma.clone(), kp.pk, contract_details.witness.clone(), contract_details.transition.clone(), bank_kp.clone(), contract_details.state, &precom_in);
 
     let end_loan_2 = start_loan_2.elapsed();
 
+    println!("Number of CVES ciphertexts prepared: {}", cves_in.m_cis.len());
     
     println!(
-        "Total loan setup time: {:?} for {} installments",
-        end_loan_2, installments
+        "Setup time with precomputation: {:?}",
+        end_loan_2
     );
-    println!("Number of CVES ciphertexts prepared: {}", cves_fig6.m_cis.len());
+    
 
     let verify_loan_2 = Instant::now();
 
-    cves_fig6.clone().verify(args.gamma.clone());
+    cves_in.clone().verify();
 
     println!(
-        "Total loan vf time: {:?}",
+        "Verification time: {:?}",
         verify_loan_2.elapsed()
     );
 
@@ -119,9 +128,9 @@ fn main() {
 
     let decrypt_loan_2 = Instant::now();
 
-    let (_, _) = cves_fig6.clone().decrypt(agg_sig, wa, 1, 2);
+    let (_, _) = cves_in.clone().decrypt(agg_sig, wa, 1, 2);
     println!(
-        "Total loan decrypt time: {:?}",
+        "Decryption time: {:?}",
         decrypt_loan_2.elapsed()
     );
 

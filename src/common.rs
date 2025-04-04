@@ -6,8 +6,11 @@ use bls12_381::{
 };
 use bls12_381::{multi_miller_loop, G1Projective, G2Prepared, Gt};
 
-use crate::schnorradaptor::SchnorrPreSig;
-use crate::wes::WESCiphertext;
+use crate::schnorradaptor::{SchnorrPreSig,SchnorrPair};
+use crate::wes::{WESCiphertext, PreComp};
+use crate::oblivious::CVESCiphertextOb;
+
+use rayon::prelude::*;
 
 use rand::rngs::OsRng;
 
@@ -15,15 +18,6 @@ use secp256kfun::{g,  Scalar as ChainScalar, G, Point};
 
 use group::Group;
 use ff::Field;
-
-pub struct Precomp{
-    pub c1: G1Affine,
-    pub c3: [u8; 32],
-    pub r1: Scalar,
-    pub r2:Gt,
-    pub ri: ChainScalar,
-    pub ri_pub: Point
-}
 
 #[derive(Clone)]
 pub struct MessagesAL{
@@ -33,10 +27,11 @@ pub struct MessagesAL{
     pub transition: String,
     pub statement: Point,
     pub witness: ChainScalar,
+    pub precomp: Vec<PreComp>
 
 }
 
-pub struct LoanContractFig6{
+pub struct LoanContractIn{
     pub state: Vec<String>,
     pub transition: Vec<String>,
     pub statement: Vec<Point>,
@@ -44,35 +39,6 @@ pub struct LoanContractFig6{
 
 }
 
-
-pub fn wes_precompute(g2_prepared: &G2Prepared) -> Precomp {
-
-    let ri = sample_rand_chain_scalar();
-    let ri_pub = g!(ri * G).normalize();
-
-    let r1 = sample_rand_scalar();
-    let r2 = sample_rand_gt(g2_prepared);
-
-    let c1 = G1Affine::from(G1Affine::generator() * &r1);
-
-    let mut h_xor_sec = gt_to_bytes(&r2);
-
-    for (xor_byte, ri_byte) in h_xor_sec.iter_mut().zip(&ri.to_bytes()) {
-        *xor_byte ^= ri_byte
-    }
-
-    let c3 = h_xor_sec.try_into().unwrap();
-
-    Precomp{
-        c1,
-        c3,
-        r1,
-        r2,
-        ri,
-        ri_pub,
-    }
-
-}
 
 pub fn sample_rand_gt( g2prepared: &G2Prepared)-> Gt{
     let gt_elem = {
@@ -126,8 +92,6 @@ fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
     }
     bits
 }
-
-// For the moment, it does not take the WES ciphertexts as input, I will modify it at a later moment.
 
 pub fn hash_to_bits(cis:&Vec<WESCiphertext>, ri_pub:Vec<Point>, c_omega: ChainScalar, xa: Point, xw: Point, y_pub: Point, sigma_tilde: &SchnorrPreSig ) ->Vec<bool>{
 
@@ -187,7 +151,7 @@ pub fn hash_to_bits(cis:&Vec<WESCiphertext>, ri_pub:Vec<Point>, c_omega: ChainSc
 }
 
 
-pub fn hash_to_bits_fig6(cis:&Vec<Vec<WESCiphertext>>, ri_pub:&Vec<Vec<Point>>, c_omega: &Vec<Vec<ChainScalar>>, x: &Vec<Point>, y_pub: &Vec<Vec<Point>>, sigma_tilde: &Vec<Vec<SchnorrPreSig>> ) ->Vec<bool>{
+pub fn hash_to_bits_in(cis:&Vec<Vec<WESCiphertext>>, ri_pub:&Vec<Vec<Point>>, c_omega: &Vec<Vec<ChainScalar>>, x: &Vec<Point>, y_pub: &Vec<Vec<Point>>, sigma_tilde: &Vec<Vec<SchnorrPreSig>> ) ->Vec<bool>{
 
         // Step 1: Serialize all inputs into bytes
         let mut serialized_data = Vec::new();
@@ -305,7 +269,7 @@ pub fn schnorr_hash(pk:&Point, rand:Point, m:&str) -> ChainScalar {
 }
 
 
-pub fn message_creator(installments:usize) -> Vec<MessagesAL> {
+pub fn message_creator(installments:usize, gamma:usize) -> Vec<MessagesAL> {
    
     let mut tuples = Vec::new();
 
@@ -317,6 +281,7 @@ pub fn message_creator(installments:usize) -> Vec<MessagesAL> {
 
             let witness = sample_rand_chain_scalar();        
             let statement = g!(witness * G).normalize();
+            let precomp = CVESCiphertextOb::precompute(gamma);
 
             let entry = MessagesAL{
                 origin:j,
@@ -325,6 +290,7 @@ pub fn message_creator(installments:usize) -> Vec<MessagesAL> {
                 transition,
                 statement,
                 witness,
+                precomp
             };
     
             tuples.push(entry);
@@ -335,7 +301,7 @@ pub fn message_creator(installments:usize) -> Vec<MessagesAL> {
 }
 
 
-pub fn message_creator_involved_oracle(installments:usize) -> LoanContractFig6 {
+pub fn message_creator_involved_oracle(installments:usize) -> LoanContractIn {
 
 
     let (state, transition, mut statement, mut witness):(Vec<String>, Vec<String>, Vec<Point>, Vec<ChainScalar>) = (1..=installments)
@@ -364,7 +330,7 @@ pub fn message_creator_involved_oracle(installments:usize) -> LoanContractFig6 {
     statement.insert(0, x0);
     witness.insert(0, w0);
 
-    LoanContractFig6{
+    LoanContractIn{
         state,
         transition,
         statement,
@@ -374,4 +340,52 @@ pub fn message_creator_involved_oracle(installments:usize) -> LoanContractFig6 {
    
 }
 
+pub fn prepare_loan(gamma: usize, conditions:Vec<MessagesAL>, pk:G1Affine, bank_kp:SchnorrPair) -> (Vec<CVESCiphertextOb>,  ChainScalar) {
 
+    let w0 = sample_rand_chain_scalar(); 
+
+    
+    let loan_ciphertexts: Vec<CVESCiphertextOb> = conditions
+        .par_iter()
+        .map(| condition| {
+
+            if condition.origin == 0{
+
+                let cves_ob = CVESCiphertextOb::enc_cs_from_precom(gamma.clone(), pk, w0.clone(), &condition.transition, condition.witness.clone(), bank_kp.clone(), &condition.state, &condition.precomp);
+
+
+                cves_ob
+
+                
+
+            }else{
+
+
+                let cves_ob = CVESCiphertextOb::enc_cs_from_precom(gamma.clone(), pk, conditions[condition.origin].witness.clone(), &condition.transition, condition.witness.clone(), bank_kp.clone(), &condition.state, &condition.precomp);
+
+                cves_ob
+
+            }
+            
+           
+            
+            
+            
+        })
+        .collect();
+
+        
+    
+    (loan_ciphertexts, w0)
+}
+
+pub fn verify_loan(cves:Vec<CVESCiphertextOb>)-> () {
+    cves
+    .iter()
+    .for_each(|cve|{
+
+        cve.clone().verify();
+
+    });
+
+}
