@@ -50,7 +50,7 @@ fn main() {
     let (loan_ciphertexts, _w0) = prepare_loan(args.gamma.clone(), conditions.clone(), kp.pk, bank_kp.clone());
 
     let end_loan = start_loan.elapsed();
-    println!("Number of CVES ciphertexts prepared: {}", loan_ciphertexts.len());
+    println!("Number of ciphertexts prepared: {}", loan_ciphertexts.len());
 
     println!(
         "Setup time with precomputation: {:?}",
@@ -100,7 +100,7 @@ fn main() {
 
     let end_loan_2 = start_loan_2.elapsed();
 
-    println!("Number of CVES ciphertexts prepared: {}", cves_in.m_cis.len());
+    println!("Number of ciphertexts prepared: {}", cves_in.m_cis.len());
     
     println!(
         "Setup time with precomputation: {:?}",
