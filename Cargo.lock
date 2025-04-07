@@ -59,6 +59,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcfed56ad506cb2c684a14971b8861fdc3baaaae314b9e5f9bb532cbe3ba7a4f"
 
 [[package]]
+name = "atomic_loans"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "clap",
+ "ff",
+ "group",
+ "irmaseal-curve",
+ "rand",
+ "rand_chacha",
+ "rayon",
+ "schnorr_fun",
+ "secp256k1-zkp",
+ "secp256kfun",
+ "serde",
+ "sha2",
+ "sigma_fun",
+ "subtle",
+]
+
+[[package]]
 name = "bincode"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -413,28 +435,6 @@ checksum = "1465873a3dfdaa8ae7cb14b4383657caab0b3e8a0aa9ae8e04b044854c8dfce2"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
-]
-
-[[package]]
-name = "atomic_loans"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bincode",
- "clap",
- "ff",
- "group",
- "irmaseal-curve",
- "rand",
- "rand_chacha",
- "rayon",
- "schnorr_fun",
- "secp256k1-zkp",
- "secp256kfun",
- "serde",
- "sha2",
- "sigma_fun",
- "subtle",
 ]
 
 [[package]]
