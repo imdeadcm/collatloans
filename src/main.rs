@@ -14,7 +14,7 @@ use clap::Parser;
 #[clap(author, version, about, long_about = None)]
 struct Args {
     /// Set the value of gamma
-    #[clap(short = 'g', long = "gamma", default_value_t = 30)]
+    #[clap(short = 'g', long = "gamma", default_value_t = 256)]
     gamma: usize,
 
     /// Set the number of states
