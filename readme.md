@@ -1,6 +1,6 @@
 # Cryptographic Collateralized Loan without Smart Contracts
 
-Implementation for the primitive VCME of the paper _Cryptographic Collateralized Loan without Smart Contracts_.
+Implementation for the primitive VCMwE of the paper _Cryptographic Collateralized Loan without Smart Contracts_.
 We provide two implementations, baseline and efficient.
 
 ## How to run
