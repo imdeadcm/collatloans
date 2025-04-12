@@ -39,7 +39,7 @@ fn main() {
         "\nNumber of states: {}",
         installments
     );
-    println!("\n-----Oblivious oracle-----");
+    println!("\n-----Baseline-----");
     
     
 
@@ -88,7 +88,7 @@ fn main() {
 
 
 
-    println!("\n-----Involved oracle-----");
+    println!("\n-----Efficient-----");
 
     
     let contract_details = message_creator_involved_oracle(installments);
