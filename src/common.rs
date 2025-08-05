@@ -10,6 +10,8 @@ use crate::schnorradaptor::{SchnorrPreSig,SchnorrPair};
 use crate::wes::{WESCiphertext, PreComp};
 use crate::oblivious::CVESCiphertextOb;
 
+use crate::signbls::BLSKeyPair;
+
 use rayon::prelude::*;
 
 use rand::rngs::OsRng;
@@ -18,6 +20,9 @@ use secp256kfun::{g,  Scalar as ChainScalar, G, Point};
 
 use group::Group;
 use ff::Field;
+
+use std::time::Instant;
+use std::mem::size_of_val;
 
 #[derive(Clone)]
 pub struct MessagesAL{
@@ -387,5 +392,28 @@ pub fn verify_loan(cves:Vec<CVESCiphertextOb>)-> () {
         cve.clone().verify();
 
     });
+
+}
+
+
+pub fn time_size_oracle(kp:BLSKeyPair)->() {
+
+    let start = Instant::now();
+    let results: Vec<G2Affine> = (0..2000).into_par_iter()
+        .map(|_| kp.sign(&"transaction"))
+        .collect();
+    let end = start.elapsed();
+
+    let total_size: usize = results.iter()
+        .map(|result| size_of_val(&result.to_compressed()))
+        .sum();
+
+
+    println!("Size of 2000 attestations: {} kB", total_size/1000);
+
+    println!(
+        "Time to attest 2000 transactions: {:?}",
+        end
+    );    
 
 }

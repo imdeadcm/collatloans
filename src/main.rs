@@ -1,6 +1,6 @@
 use atomic_loans::signbls::BLSKeyPair; 
 
-use atomic_loans::common::{message_creator_involved_oracle, message_creator,prepare_loan, verify_loan};
+use atomic_loans::common::{message_creator_involved_oracle, message_creator,prepare_loan, verify_loan, time_size_oracle};
 
 use atomic_loans::schnorradaptor::SchnorrPair;
 
@@ -9,6 +9,8 @@ use atomic_loans::involved::CVESCiphertextIn;
 use std::time::Instant;
 
 use clap::Parser;
+
+
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -39,7 +41,7 @@ fn main() {
         "\nNumber of states: {}",
         installments
     );
-    println!("\n-----Oblivious oracle-----");
+    println!("\n-----Baseline Implementation-----");
     
     
 
@@ -56,8 +58,7 @@ fn main() {
         "Setup time with precomputation: {:?}",
         end_loan
     );
-    
-
+   
 
     let verify_loan_a = Instant::now();
 
@@ -88,7 +89,7 @@ fn main() {
 
 
 
-    println!("\n-----Involved oracle-----");
+    println!("\n-----Efficient Implementation-----");
 
     
     let contract_details = message_creator_involved_oracle(installments);
@@ -133,5 +134,12 @@ fn main() {
         "Decryption time: {:?}",
         decrypt_loan_2.elapsed()
     );
+
+
+    println!("\n-----Oracle Attestation estimation-----");
+
+    let _ = time_size_oracle(kp.clone());
+
+   
 
 }
