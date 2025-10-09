@@ -4,7 +4,7 @@ use atomic_loans::common::{message_creator_involved_oracle, message_creator,prep
 
 use atomic_loans::schnorradaptor::SchnorrPair;
 
-use atomic_loans::involved::CVESCiphertextIn;
+use atomic_loans::efficient::CVESCiphertextIn;
 
 use std::time::Instant;
 
@@ -69,7 +69,7 @@ fn main() {
         verify_loan_a.elapsed()
     );
 
-    // transition 1
+    // transition 
 
     let transition = conditions[2].clone();
 
@@ -130,9 +130,11 @@ fn main() {
     let decrypt_loan_2 = Instant::now();
 
     let (_, _) = cves_in.clone().decrypt(agg_sig, wa, 1, 2);
+
+    // We provide the worst case scenario in which N decryptions are required.
     println!(
         "Decryption time: {:?}",
-        decrypt_loan_2.elapsed()
+        decrypt_loan_2.elapsed()*args.states.clone().try_into().unwrap()
     );
 
 

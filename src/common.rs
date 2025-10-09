@@ -8,7 +8,7 @@ use bls12_381::{multi_miller_loop, G1Projective, G2Prepared, Gt};
 
 use crate::schnorradaptor::{SchnorrPreSig,SchnorrPair};
 use crate::wes::{WESCiphertext, PreComp};
-use crate::oblivious::CVESCiphertextOb;
+use crate::baseline::CVESCiphertextOb;
 
 use crate::signbls::BLSKeyPair;
 
