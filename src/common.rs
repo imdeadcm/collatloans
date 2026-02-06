@@ -156,7 +156,7 @@ pub fn hash_to_bits(cis:&Vec<WESCiphertext>, ri_pub:Vec<Point>, c_omega: ChainSc
 }
 
 
-pub fn hash_to_bits_in(cis:&Vec<Vec<WESCiphertext>>, ri_pub:&Vec<Vec<Point>>, c_omega: &Vec<Vec<ChainScalar>>, x: &Vec<Point>, y_pub: &Vec<Vec<Point>>, sigma_tilde: &Vec<Vec<SchnorrPreSig>> ) ->Vec<bool>{
+pub fn hash_to_bits_in(cis:&Vec<Vec<WESCiphertext>>, ri_pub:&Vec<Vec<Point>>, c_omega: &Vec<ChainScalar>, x: &Vec<Point>, y_pub: &Vec<Point>, sigma_tilde: &Vec<SchnorrPreSig> ) ->Vec<bool>{
 
         // Step 1: Serialize all inputs into bytes
         let mut serialized_data = Vec::new();
@@ -188,13 +188,13 @@ pub fn hash_to_bits_in(cis:&Vec<Vec<WESCiphertext>>, ri_pub:&Vec<Vec<Point>>, c_
         }
     
         // Serialize c_omega
-        for omegas in c_omega{
-            for omega in omegas{
+        for omega in c_omega{
+            
 
                 let scalar_bytes = omega.to_bytes();
                 serialized_data.extend(scalar_bytes);
 
-            }
+
         }
         
     
@@ -206,26 +206,26 @@ pub fn hash_to_bits_in(cis:&Vec<Vec<WESCiphertext>>, ri_pub:&Vec<Vec<Point>>, c_
         }
     
         // Serialize y_pub
-        for points in y_pub{
-            for point in points{
+        for point in y_pub{
+           
 
                 let y_pub_bytes = point.to_bytes();
                 serialized_data.extend(y_pub_bytes);
 
-            }
+
         }
         
     
         // Serialize presig
-        for pss in sigma_tilde{
-            for ps in pss{
+        for ps in sigma_tilde{
+           
 
                 let sigmas_bytes = ps.s.to_bytes();
                 serialized_data.extend(sigmas_bytes);
                 let sigmar_bytes = ps.r.to_bytes();
                 serialized_data.extend(sigmar_bytes);
 
-            }
+            
         }
     
         // Step 2: Hash the concatenated serialized data

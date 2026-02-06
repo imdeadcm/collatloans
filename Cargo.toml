@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+indicatif = "0.17"
 bls12_381 = { version = "0.1.4", package = "irmaseal-curve", features = ["experimental"] }
 anyhow = "1"
 secp256kfun = {  version = "0.7", features = ["serde"] }

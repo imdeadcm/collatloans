@@ -15,13 +15,13 @@ use rayon::prelude::*;
 #[derive(Clone)]
 pub struct CVESCiphertextIn {
     pub m_cis: Vec<Vec<WESCiphertext>>,
-    pub c_omega: Vec<Vec<ChainScalar>>,
+    pub c_omega: Vec<ChainScalar>,
     pub sop: Vec<Vec<SopUnitIn>>,
     pub suop: Vec<Vec<SuopUnitIn>>,
     pub m_ri_pub: Vec<Vec<Point>>,
     pub x: Vec<Point>,
-    pub y_pub: Vec<Vec<Point>>,
-    pub sigma_tilde: Vec<Vec<SchnorrPreSig>>,
+    pub y_pub: Vec<Point>,
+    pub sigma_tilde: Vec<SchnorrPreSig>,
     pub m: Vec<String>,
     pub pk: G1Affine,
     pub tx: Vec<String>,
@@ -40,7 +40,7 @@ pub struct SopUnitIn {
 pub struct SuopUnitIn {
     pub i: usize,
     pub j: usize,
-    pub si: Vec<ChainScalar>,
+    pub si: ChainScalar,
     pub ci: WESCiphertext,
 }
 
@@ -128,38 +128,26 @@ impl CVESCiphertextIn{
         })
         .collect();
 
-        // Encryption and adaptor it loops for all possible transitions.
+        // Encryption and adaptor, one for each state.
 
-        let (y, sigma_tilde, y_pub, c_omega): (Vec<Vec<ChainScalar>>, Vec<Vec<SchnorrPreSig>>, Vec<Vec<Point>>, Vec<Vec<ChainScalar>>) = (1..(l_tx+1))
+        let (y, sigma_tilde, y_pub, c_omega): (Vec<ChainScalar>, Vec<SchnorrPreSig>, Vec<Point>, Vec<ChainScalar>) = (1..(l_tx+1))
         .map(|i|{
-            
-            let (y_i, sigma_tilde_i, y_pub_i, c_omega_i):(Vec<ChainScalar>, Vec<SchnorrPreSig>, Vec<Point>, Vec<ChainScalar>) = (0..i)
-            .map(|j|{
-                // points
-                
+
                 let sec = &w[i];
-                let y_ij = sample_rand_chain_scalar();
-                let y_pub_ij = g!(y_ij * G).normalize();
-                let wa = &w[j];
+                let y_i = sample_rand_chain_scalar();
+                let y_pub_i = g!(y_i * G).normalize();
+                let wa = &w[0];
                 let xa = g!(wa * G).normalize();
-                let y_tilde_pub_ij = g!(y_pub_ij + xa).normalize().expect_nonzero("They are random points");
+                let y_tilde_pub_i = g!(y_pub_i + xa).normalize().expect_nonzero("They are random points");
 
                 // adaptor
 
-                let sigma_tilde_ij = a_kp.clone().pre_sign(&tx[i-1], &y_tilde_pub_ij); 
+                let sigma_tilde_i = a_kp.clone().pre_sign(&tx[i-1], &y_tilde_pub_i); 
 
                 // encryption
-                let mut c_omega_ij = s!(y_ij + wa).expect_nonzero("random scalar");    
-                c_omega_ij = s!(c_omega_ij + sec).expect_nonzero(" random scalars");
-                (
-                    y_ij,
-                    sigma_tilde_ij,
-                    y_pub_ij,
-                    c_omega_ij
-                )
-
-            })
-            .collect();
+                let mut c_omega_i = s!(y_i + wa).expect_nonzero("random scalar");    
+                c_omega_i = s!(c_omega_i + sec).expect_nonzero(" random scalars");
+            
 
             (y_i, sigma_tilde_i, y_pub_i, c_omega_i)
 
@@ -226,20 +214,18 @@ impl CVESCiphertextIn{
                 let bit = bits[k];
 
                 if !bit {
-                    let si: Vec<ChainScalar> = (0..i)
-                    .map(|j|{
+                    let mut sij = precom[0][k].ri.clone();
 
+                    for idx in 2..i {
                         
+                        let ri = precom[idx-1][k].ri.clone();
 
-                        let y = y[i-1][j].clone();
-                        let ri = precom[i-1][k].ri.clone();
+                        sij = s!(sij+ri).expect_nonzero("they should be two random scalars");
+                        
+                    }
 
-                        let sij = s!(y+ri).expect_nonzero("they should be two random scalars");
-
-                        sij
-
-                    })
-                    .collect();
+                    let y = y[i-1].clone();
+                    let si = s!(sij+y).expect_nonzero("they should be two random scalars");
 
                     let ci = m_cis[i-1][k].clone();
 
@@ -249,13 +235,12 @@ impl CVESCiphertextIn{
                         si,
                         ci
                     })
-    
-                    } else{
 
-                       None
-                    
+                } else{
 
-                    }
+                    None                
+
+                }
             }).collect();
 
             suop_k
@@ -290,14 +275,14 @@ impl CVESCiphertextIn{
         // Check encryption and adaptor
 
         for i in 1..l_tx+1{
-            for j in 0..i{
+            
 
-                let c_omega_ij = &self.c_omega[i-1][j];
+                let c_omega_i = &self.c_omega[i-1];
                 let xw = self.x[i].clone();
-                let xa = self.x[j].clone();
-                let y1 = &self.y_pub[i-1][j];
+                let xa = self.x[0].clone();
+                let y1 = &self.y_pub[i-1];
 
-                let gc_omega = g!(c_omega_ij * G).normalize();
+                let gc_omega = g!(c_omega_i * G).normalize();
     
                 let mut check = g!(xa + y1).normalize().expect_nonzero("");
                 
@@ -305,14 +290,14 @@ impl CVESCiphertextIn{
             
                 assert!(gc_omega == check, "CVES verification failed: invalid encryption");
 
-                let y_tilde_pub_ij = g!(y1 + xa).normalize().expect_nonzero("");
+                let y_tilde_pub_i = g!(y1 + xa).normalize().expect_nonzero("");
 
                 let tx_i= &self.tx[i-1];
-                let sigma_tilde_ij = &self.sigma_tilde[i-1][j];
+                let sigma_tilde_i = &self.sigma_tilde[i-1];
 
-                sigma_tilde_ij.clone().pre_verify(&self.vk, tx_i, &y_tilde_pub_ij);
+                sigma_tilde_i.clone().pre_verify(&self.vk, tx_i, &y_tilde_pub_i);
 
-            }
+
         }
 
 
@@ -367,60 +352,72 @@ impl CVESCiphertextIn{
 
             assert!(!bits[suop_u.i], "Invalid SUOP");
 
-            for i in 1..suop_u.j{
+            // for i in 1..suop_u.j{
 
-                let si = suop_u.si[i-1].clone();
+                let si = suop_u.si.clone();
 
                 let gs = g!(si * G).normalize();
 
-                let y_pub_ij = self.y_pub[suop_u.j-1][i-1].clone();
-                let ri_pub = self.m_ri_pub[suop_u.j-1][suop_u.i].clone();
+                let y_pub_i = self.y_pub[suop_u.j-1].clone();
 
-                let check = g!(y_pub_ij + ri_pub).normalize().expect_nonzero("");
+                let mut ri_pub_acc = self.m_ri_pub[0][suop_u.i].clone();
+
+                for idx in 2..suop_u.j {
+                        
+                        let ri_pub = self.m_ri_pub[idx-1][suop_u.i].clone();
+
+                        ri_pub_acc = g!(ri_pub_acc+ri_pub).normalize().expect_nonzero("");
+                        
+                    }
+
+                // let ri_pub = self.m_ri_pub[suop_u.j-1][suop_u.i].clone();
+
+                let check = g!(y_pub_i + ri_pub_acc).normalize().expect_nonzero("");
 
                 assert!(check == gs, "Invalid one time pad");
 
 
-            }
+            // }
 
         });
 
     }
 
 
-    pub fn decrypt(self, sig:G2Affine, wa:ChainScalar, origin: usize, state: usize) -> (ChainScalar, SchnorrSig) {
+    pub fn decrypt(self, sig:G2Affine, wa:ChainScalar, state: usize) -> (ChainScalar, SchnorrSig) {
 
         let xa = g!(wa * G).normalize();
 
-        assert!(xa == self.x[origin].clone(), "origin and wa must match");
-        assert!(origin<state, "origin must be smaller than state");
+        assert!(xa == self.x[0].clone(), "origin and wa must match");
 
-        let xw = self.x[state+1].clone();
+        let xw = self.x[state].clone();
 
         if let Some(output) = self.suop.iter()
         .flatten()
-        .filter(|suop_u| suop_u.j == state+1)
+        .filter(|suop_u| suop_u.j == state)
         .find_map(|suop_u|{
 
             let r = suop_u.ci.clone().decrypt(sig);
 
-            let s = suop_u.si[origin].clone();
+            let s = suop_u.si.clone();
 
             let y = s!(s - r).expect_nonzero("");
 
             let y_tilde = s!(y + wa).expect_nonzero("");
 
-            let c_omega = self.c_omega[state][origin].clone();
+            let c_omega = self.c_omega[state-1].clone();
 
             let sec = s!(c_omega - y_tilde).expect_nonzero("");
 
-            let sig = self.sigma_tilde[state][origin].clone().adapt(&y_tilde);
+            let sig = self.sigma_tilde[state-1].clone().adapt(&y_tilde);
 
             let gsec = g!(sec * G).normalize();  
+
+            assert!(gsec== xw, "Invalid witness");
             
 
-            sig.clone().verify(&self.vk, &self.tx[state]);
-            assert!(gsec== xw, "Invalid witness");
+            sig.clone().verify(&self.vk, &self.tx[state-1]);
+            
 
 
             Some((sec, sig.clone()))

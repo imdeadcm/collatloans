@@ -41,7 +41,7 @@ fn main() {
         "\nNumber of states: {}",
         installments
     );
-    println!("\n-----Baseline Implementation-----");
+    println!("\n-----Transitive Tournament Implementation-----");
     
     
 
@@ -89,7 +89,7 @@ fn main() {
 
 
 
-    println!("\n-----Efficient Implementation-----");
+    println!("\n-----Linear Graph Implementation-----");
 
     
     let contract_details = message_creator_involved_oracle(installments);
@@ -121,15 +121,14 @@ fn main() {
 
     // transition 1 - 2:
 
-    let wa = contract_details.witness[1].clone();
+    let wa = contract_details.witness[0].clone();
 
-    let first_2: Vec<String> = contract_details.transition.clone().drain(..3).collect();
-
-    let agg_sig = kp.clone().agg_sign(first_2);
+    let first: String = contract_details.transition[0].clone();
+    let agg_sig = kp.clone().sign(&first);
 
     let decrypt_loan_2 = Instant::now();
 
-    let (_, _) = cves_in.clone().decrypt(agg_sig, wa, 1, 2);
+    let (_, _) = cves_in.clone().decrypt(agg_sig, wa, 1);
 
     // We provide the worst case scenario in which N decryptions are required.
     println!(
