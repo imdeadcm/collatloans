@@ -14,3 +14,4 @@ Prepare the ciphertext for a loan with security parameter 256 and 6 installments
 ```
 cargo run --release -- -g 256 -s 6
 ```
+
