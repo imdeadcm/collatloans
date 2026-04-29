@@ -399,7 +399,7 @@ pub fn verify_loan(cves:Vec<CVESCiphertextOb>)-> () {
 pub fn time_size_oracle(kp:BLSKeyPair)->() {
 
     let start = Instant::now();
-    let results: Vec<G2Affine> = (0..2000).into_par_iter()
+    let results: Vec<G2Affine> = (0..3000).into_par_iter()
         .map(|_| kp.sign(&"transaction"))
         .collect();
     let end = start.elapsed();
@@ -409,10 +409,10 @@ pub fn time_size_oracle(kp:BLSKeyPair)->() {
         .sum();
 
 
-    println!("Size of 2000 attestations: {} kB", total_size/1000);
+    println!("Size of 3000 attestations: {} kB", total_size/1000);
 
     println!(
-        "Time to attest 2000 transactions: {:?}",
+        "Time to attest 3000 transactions: {:?}",
         end
     );    
 
